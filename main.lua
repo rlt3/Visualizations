@@ -1,6 +1,9 @@
 require("a-star-lua/a-star")
 local vector = require("vector")
 
+-- Gives a precise random decimal number given a minimum and maximum
+function math.prandom(min, max) return love.math.random() * (max - min) + min end
+
 -- Holds all Nodes which are defined below
 local AllNodes = {
     -- utility function for a* to determine if a neighbor is valid
@@ -26,8 +29,8 @@ local AllNodes = {
 -- Holds all Packets which are sent between Nodes
 local AllPackets = {
     -- utility function to create a Packet, insert it, and then return it
-    insert = function(self, start)
-        local p = Packet(start)
+    insert = function(self, start, speed)
+        local p = Packet(start, speed)
         table.insert(self, p)
         return p
     end
@@ -59,7 +62,7 @@ function Node (name, x, y)
   return t
 end
 
-function Packet (startNode)
+function Packet (startNode, speed)
     local t = {
         pos = startNode,
         traveling = false,
@@ -69,6 +72,7 @@ function Packet (startNode)
         from = nil,
         to = nil,
         time = 0,
+        speed = speed,
 
         draw = function (self)
             love.graphics.rectangle("fill", self.pos.x, self.pos.y, 10, 10)
@@ -124,7 +128,7 @@ function Packet (startNode)
                 self.to = self.path[self.path_index]
             end
 
-            self.time = self.time + dt
+            self.time = self.time + (dt * self.speed)
             self.pos = vector.lerp(self.from, self.to, self.time)
         end
   }
@@ -164,7 +168,7 @@ function love.load ()
     love.window.setMode(800, 600, { msaa = 16, centered = true })
     create_pythagorean_network()
     for i = 1, 100 do
-        AllPackets:insert(AllNodes:random())
+        AllPackets:insert(AllNodes:random(), math.prandom(1, 3))
     end
 end
 
