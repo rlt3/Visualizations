@@ -38,9 +38,10 @@ function Packet.new (speed)
     return setmetatable(t, Packet)
 end
 
+-- Expects 'from' and 'to' to both be Vectors
 function Packet:reset (from, to)
-    self.from = Vector.new(from.x, from.y)
-    self.to = Vector.new(to.x, to.y)
+    self.from = from
+    self.to = to
     self.pos = self.from
     self.time = 0
 end
@@ -59,10 +60,11 @@ Pipe.__index = Pipe
 
 function Pipe.new (from, to)
     local t = { 
-        from = from,
-        to = to,
+        from = Vector.new(from.x, from.y),
+        to = Vector.new(to.x, to.y),
         pipeline = Queue.new(),
     }
+    t.angle = Vector.angle(t.from, t.to)
     return setmetatable(t, Pipe)
 end
 
@@ -72,7 +74,11 @@ end
 
 function Pipe:draw ()
     self.pipeline:map(function (pkt)
-        love.graphics.rectangle("fill", pkt.pos.x, pkt.pos.y, 10, 10)
+        love.graphics.push()
+        love.graphics.translate(pkt.pos.x, pkt.pos.y)
+        love.graphics.rotate(self.angle)
+        love.graphics.rectangle("fill", -5, -5, 10, 10)
+        love.graphics.pop()
     end)
 end
 
@@ -133,20 +139,36 @@ function love.load()
 
     A = Node.new("a", 25, 300)
     B = Node.new("b", 775, 300)
-    P = Pipe.new(A, B)
+
+    C = Node.new("c", 25, 575)
+    D = Node.new("d", 775, 25)
+
+    Pab = Pipe.new(A, B)
+    Pcd = Pipe.new(C, D)
     T = 0
 end
 
 function love.draw()
     A:draw()
     B:draw()
-    P:draw()
+    C:draw()
+    D:draw()
+
+    Pab:draw()
+    Pcd:draw()
 end
 
 function love.update (dt)
-    P:pump(dt)
+    Pab:pump(dt)
+    Pcd:pump(dt)
+
     T = T + 1
-    if T % 2 and math.random(1, 100) < 15 then
-        P:send(Packet.new(math.prandom(0.25, 1.5)))
+    if T % 2 then
+        local r = math.random(1, 100)
+        if r < 15 then
+            Pab:send(Packet.new(math.prandom(0.25, 1.5)))
+        elseif r > 15 and r < 31 then
+            Pcd:send(Packet.new(math.prandom(0.25, 1.5)))
+        end
     end
 end

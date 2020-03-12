@@ -10,17 +10,17 @@ function Vector.new(x, y)
 end
 
 -- operator overloading
-function Vector.__add(lhs, rhs)
+function Vector.__add (lhs, rhs)
     assert(is_vector(lhs) and is_vector(rhs), "Type mismatch: Vector expected.")
     return Vector.new(lhs.x + rhs.x, lhs.y + rhs.y)
 end
 
-function Vector.__sub(lhs, rhs)
+function Vector.__sub (lhs, rhs)
     assert(is_vector(lhs) and is_vector(rhs), "Type mismatch: Vector expected.")
     return Vector.new(lhs.x - rhs.x, lhs.y - rhs.y)
 end
 
-function Vector.__mul(lhs, rhs)
+function Vector.__mul (lhs, rhs)
     local is_rhs_vector = is_vector(rhs)
     local is_lhs_vector = is_vector(lhs)
     if type(lhs) == "number" and is_rhs_vector then
@@ -39,45 +39,31 @@ function Vector.__unm(t)
     return Vector.new(-t.x, -t.y)
 end
 
-function Vector:__tostring()
+function Vector:__tostring ()
     return "("..self.x..", "..self.y..")"
 end
 
-function Vector.__eq(lhs, rhs)
+function Vector.__eq (lhs, rhs)
     return lhs.x == rhs.x and lhs.y == rhs.y
 end
 
-function Vector.__lt(lhs, rhs)
+function Vector.__lt (lhs, rhs)
     return lhs.x < rhs.x or (not (rhs.x < lhs.x) and lhs.y < rhs.y)
 end
 
-function Vector.__le(lhs, rhs)
+function Vector.__le (lhs, rhs)
     return lhs.x <= rhs.x or lhs.y <= rhs.y
 end
 
-
--- actual functions
-function Vector:clone()
+function Vector:clone ()
     return Vector.new(self.x, self.y)
 end
 
-function Vector:length()
+function Vector:length ()
     return math.sqrt(self.x * self.x + self.y * self.y)
 end
 
-function Vector:length_squared()
-    return self.x * self.x + self.y * self.y
-end
-
-function Vector:is_unit()
-    return self:length_squared() == 1
-end
-
-function Vector:unpack()
-    return self.x, self.y
-end
-
-function Vector:normalize()
+function Vector:normalize ()
     local len = self:length()
     if len ~= 0 and len ~= 1 then
         self.x = self.x / len
@@ -85,7 +71,7 @@ function Vector:normalize()
     end
 end
 
-function Vector:normalized()
+function Vector:normalized ()
     return self:clone():normalize()
 end
 
@@ -94,43 +80,18 @@ function Vector.dot(lhs, rhs)
     return lhs.x * rhs.x + lhs.y * rhs.y
 end
 
-function Vector.distance(lhs, rhs)
+function Vector.distance (lhs, rhs)
     assert(is_vector(lhs) and is_vector(rhs), "Type mismatch: Vector expected")
     local dx, dy = lhs.x - rhs.x, lhs.y - rhs.y
     return math.sqrt(dx * dx + dy * dy)
 end
 
-function Vector.distance_squared(lhs, rhs)
-    assert(is_vector(lhs) and is_vector(rhs), "Type mismatch: Vector expected")
-    local dx, dy = lhs.x - rhs.x, lhs.y - rhs.y
-    return dx * dx + dy * dy
-end
-
-function Vector.max(lhs, rhs)
-    assert(is_vector(lhs) and is_vector(rhs), "Type mismatch: Vector expected")
-    local x = math.max(lhs.x, rhs.x)
-    local y = math.max(lhs.y, rhs.y)
-    return Vector.new(x, y)
-end
-
-function Vector.min(lhs, rhs)
-    assert(is_vector(lhs) and is_vector(rhs), "Type mismatch: Vector expected")
-    local x = math.min(lhs.x, rhs.x)
-    local y = math.min(lhs.y, rhs.y)
-    return Vector.new(x, y)
-end
-
-function Vector.angle(from, to)
+function Vector.angle (from, to)
     assert(is_vector(from) and is_vector(to), "Type mismatch: Vector expected")
-    return math.acos(Vector.dot(from, to) / (from:length() * to:length()))
+    return math.atan2(to.y - from.y, to.x - from.x)
 end
 
-function Vector.direction(from, to)
-    assert(is_vector(from) and is_vector(to), "Type mismatch: Vector expected")
-    return math.atan2(to.x - from.x, to.y - from.y)
-end
-
-function Vector.lerp(from, to, t)
+function Vector.lerp (from, to, t)
     assert(is_vector(from) and is_vector(to), "Type mismatch: Vector expected")
     assert(type(t) == "number", "Type mismatch: number expected for t")
     return (1 - t) * from + t * to;
