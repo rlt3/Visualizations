@@ -6,6 +6,10 @@ function Queue.new ()
 end
 
 function Queue:push (v)
+    if self:length() == 0 then
+        self.tail = 1
+        self.head = 1
+    end
     self[self.tail] = v
     self.tail = self.tail + 1
 end
@@ -29,6 +33,7 @@ function Queue:back ()
 end
 
 function Queue:map (f)
+    if self:length() == 0 then return end
     for i = self.head, self.tail - 1 do
         f(self[i])
     end
