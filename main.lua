@@ -7,7 +7,9 @@ local EDGE = nil
 function love.load()
     local a = Node.new("a", 300, 300, 5)
     local b = Node.new("b", 400, 300, 5)
-    EDGE = Edge.new(a, b)
+    a:add_edge(b)
+    b:add_edge(a)
+    EDGE = a.edges["b"]
     local p = Packet.new()
     EDGE:send(p)
 end

@@ -36,22 +36,17 @@ function Node:__tostring ()
 end
 
 function Node:is_neighbor (node)
-    for k, edge in pairs(self.edges) do
-        if edge.to == node then
-            return true
-        end
-    end
-    return false
+    return self.edges[node.name] 
+end
+
+-- Add the Edge where the "to" Node's name is the lookup key
+function Node:add_edge (to)
+    self.edges[to.name] = Edge.new(self, to)
 end
 
 function Node:path_to (dest)
     local ignore_cached = true
     return astar.path(self, dest, Node.all_nodes, ignore_cached, Node.is_neighbor)
-end
-
--- Add the Edge where the "to" Node's name is the lookup key
-function Node:add_edge (from, to)
-    self.edges[to.name] = Edge.new(from, to)
 end
 
 -- "Pump" edges to feed in Packets

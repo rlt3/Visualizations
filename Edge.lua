@@ -18,13 +18,11 @@ function Edge.new (fromNode, toNode)
 end
 
 function Edge.__eq (lhs, rhs)
-    return lhs.pos == rhs.pos
-        and lhs.name == rhs.name
-        and lhs.edges == rhs.edges
+    return lhs.from == rhs.from and lhs.to == rhs.to
 end
 
 function Edge:__tostring ()
-    return "Edge at ("..self.x..", "..self.y..")"
+    return "Edge from " .. self.from.name .." to ".. self.to.name
 end
 
 function Edge:draw ()
@@ -34,21 +32,21 @@ function Edge:draw ()
 end
 
 function Edge:send (packet)
-    --packet:set_path(self.from, self.to)
-    print(self.from)
-    print(self.to)
+    packet:set_path(self.from, self.to)
     self.in_wait:push(packet)
 end
 
 function Edge:pump (dt)
-    if self.in_transit:length() == 1 then
+    if self.in_transit:length() == 0 then
         if self.in_wait:length() == 0 then return end
         self.in_transit:push(self.in_wait:pop())
     else
         -- if packets have arrived then remove them from being in transit
-        while self.in_transit:front().arrived do
+        while self.in_transit:front() do
             -- TODO: pop this into the arriving Node's queue or somewhere
-            self.in_transit:pop()
+            if self.in_transit:front().arrived then
+                self.in_transit:pop()
+            end
         end
 
         -- if packets are in wait and there has been enough time since last pump

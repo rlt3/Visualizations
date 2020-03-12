@@ -29,19 +29,18 @@ function Packet:set_path (from, dest)
         error("A path already exists for the current Packet")
     end
 
-    local path = from:path_to(dest)
-    if not path then
-        error("No path found from " .. self.from.name .. " to " .. dest.name)
+    local p = from:path_to(dest)
+    if not p then
+        error("No path found from " .. from.name .. " to " .. dest.name)
     end
 
     -- must rebuild path using Vectors for the lerp function below
-    self.path = path
+    self.path = {}
     for i, node in ipairs(p) do
         table.insert(self.path, Vector.new(node.x, node.y))
     end
 
     self.arrived = false
-    self.dest = dest
     self.from = self.path[1]
     self.to = self.path[2]
     self.path_index = 2
@@ -62,7 +61,6 @@ function Packet:pump (dt)
             -- if we are at the end of the path entirely
             self.from = nil
             self.to = nil
-            self.pos = self.dest
             self.arrived = true
         else
             -- else we simply need to change to the new edge

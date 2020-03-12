@@ -29,11 +29,9 @@ function Queue:back ()
 end
 
 function Queue:map (f)
-    print(self.head)
-    print(self.tail)
-    --for i = self.head, self.tail do
-    --    f(self[i])
-    --end
+    for i = self.head, self.tail - 1 do
+        f(self[i])
+    end
 end
 
 function Queue:length ()
