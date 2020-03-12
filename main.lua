@@ -33,21 +33,22 @@ function Packet.new (speed)
         from = nil,
         to = nil,
         time = 0,
-        speed = speed or math.prandom(0.25, 1.5),
+        speed = speed,
     }
     return setmetatable(t, Packet)
 end
 
-function Packet:reset (from, to) self.from = Vector.new(from.x, from.y)
+function Packet:reset (from, to)
+    self.from = Vector.new(from.x, from.y)
     self.to = Vector.new(to.x, to.y)
     self.pos = self.from
     self.time = 0
 end
 
--- Updates the packet and returns its 'time'. 0 = start, 1 = end
+-- Updates the packet and returns it's new 'time'. Packets are updated on a
+-- function of time from [0,1] where 0 is 'from' and 1 is 'to'
 function Packet:update (dt)
     if self.time >= 1 then return self.time end
-    -- use a different speed if passed in
     self.time = self.time + dt
     self.pos = Vector.lerp(self.from, self.to, self.time)
     return self.time
@@ -88,6 +89,9 @@ function Pipe:pump (dt)
     local num = self.pipeline:length()
     if num == 0 then return nil end
 
+    local available = nil
+    local num_fin = 0
+
     -- rotate through the queue, updating each packet
     local lead_pkt = nil
     while num > 0 do
@@ -112,9 +116,16 @@ function Pipe:pump (dt)
             -- when packet is at the end (t >= 1) then it is not put back onto
             -- the pipeline and the next packet will become the 'lead' packet
             lead_pkt = nil
+            available = pkt
+            num_fin = num_fin + 1
         end
         num = num - 1
     end
+
+    -- A sanity check for the Queue and ordering. Should always be 1 at max
+    if num_fin > 1 then error("Dropped " .. num_fin - 1 .. " packets!") end
+
+    return available
 end
 
 function love.load()
@@ -122,9 +133,7 @@ function love.load()
 
     A = Node.new("a", 25, 300)
     B = Node.new("b", 775, 300)
-
     P = Pipe.new(A, B)
-    
     T = 0
 end
 
@@ -138,6 +147,6 @@ function love.update (dt)
     P:pump(dt)
     T = T + 1
     if T % 2 and math.random(1, 100) < 15 then
-        P:send(Packet.new())
+        P:send(Packet.new(math.prandom(0.25, 1.5)))
     end
 end
