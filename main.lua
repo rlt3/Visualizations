@@ -33,7 +33,7 @@ function Packet.new (speed)
         from = nil,
         to = nil,
         time = 0,
-        speed = speed or math.prandom(1, 3),
+        speed = speed or math.prandom(0.25, 1.5),
     }
     return setmetatable(t, Packet)
 end
@@ -45,11 +45,10 @@ function Packet:reset (from, to) self.from = Vector.new(from.x, from.y)
 end
 
 -- Updates the packet and returns its 'time'. 0 = start, 1 = end
-function Packet:update (dt, spd)
+function Packet:update (dt)
     if self.time >= 1 then return self.time end
     -- use a different speed if passed in
-    local speed = spd or self.speed
-    self.time = self.time + (dt * speed)
+    self.time = self.time + dt
     self.pos = Vector.lerp(self.from, self.to, self.time)
     return self.time
 end
@@ -87,20 +86,32 @@ end
 -- Pump the pipeline. Returns a packet if one is available, otherwise nil
 function Pipe:pump (dt)
     local num = self.pipeline:length()
-    if num == 0 then return end
+    if num == 0 then return nil end
 
     -- rotate through the queue, updating each packet
-    local speed = self.pipeline:front().speed
+    local lead_pkt = nil
     while num > 0 do
         local pkt = self.pipeline:pop()
-        -- use the slowest speed seen thus far to update
-        speed = math.min(speed, pkt.speed)
-        -- TODO: instead of using the minimal speed seen at this point, we need
-        -- to let the faster packets 'catch-up' to the slower ones before
-        -- throttling the speed
-        if pkt:update(dt, speed) < 1 then
-            -- if packet is at the end (> 1) then it vanishes
+        local pkt_dt = dt * pkt.speed
+
+        -- if this is the lead packet
+        if lead_pkt == nil then goto update end
+
+        -- if this packet will overcome the lead packet then set its delta to
+        -- be just behind the lead and set its speed to the lead
+        if pkt.time + pkt_dt > lead_pkt.time - dt then
+            pkt_dt = (lead_pkt.time - dt) - pkt.time
+            pkt.speed = lead_pkt.speed
+        end
+
+        ::update::
+        if pkt:update(pkt_dt) < 1 then
             self.pipeline:push(pkt)
+            lead_pkt = pkt
+        else
+            -- when packet is at the end (t >= 1) then it is not put back onto
+            -- the pipeline and the next packet will become the 'lead' packet
+            lead_pkt = nil
         end
         num = num - 1
     end
@@ -126,7 +137,7 @@ end
 function love.update (dt)
     P:pump(dt)
     T = T + 1
-    if T % 2 and math.random(1, 100) < 33 then
+    if T % 2 and math.random(1, 100) < 15 then
         P:send(Packet.new())
     end
 end
