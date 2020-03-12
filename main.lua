@@ -62,7 +62,8 @@ function Pipe.new (from, to)
     local t = { 
         from = Vector.new(from.x, from.y),
         to = Vector.new(to.x, to.y),
-        pipeline = Queue.new(),
+        pipeline_up = Queue.new(),
+        pipeline_down = Queue.new(),
     }
     t.angle = Vector.angle(t.from, t.to)
     return setmetatable(t, Pipe)
@@ -72,36 +73,57 @@ function Pipe:__tostring ()
     return "Pipe from " .. self.from.name .." to ".. self.to.name
 end
 
+function Pipe.draw_packet (pkt, angle, dir)
+    love.graphics.push()
+    love.graphics.translate(pkt.pos.x, pkt.pos.y)
+    love.graphics.rotate(angle)
+    love.graphics.polygon("fill", -3,-1*dir,  3,-1*dir,  3,-4*dir,  -3,-4*dir)
+    love.graphics.pop()
+end
+
 function Pipe:draw ()
-    self.pipeline:map(function (pkt)
-        love.graphics.push()
-        love.graphics.translate(pkt.pos.x, pkt.pos.y)
-        love.graphics.rotate(self.angle)
-        love.graphics.rectangle("fill", -5, -5, 10, 10)
-        love.graphics.pop()
+    self.pipeline_up:map(function (pkt)
+        Pipe.draw_packet(pkt, self.angle, 1)
+    end)
+    self.pipeline_down:map(function (pkt)
+        Pipe.draw_packet(pkt, self.angle, -1)
     end)
 end
 
 -- Input some packet to the pipeline
-function Pipe:send (pkt)
-    pkt:reset(self.from, self.to)
-    self.pipeline:push(pkt)
+function Pipe:send (pkt, dir)
     -- TODO: Need to add in a wait list for sending if last packet in queue
     -- has a time = 0
+    if dir > 0 then
+        pkt:reset(self.from, self.to)
+        self.pipeline_up:push(pkt)
+    else
+        pkt:reset(self.to, self.from)
+        self.pipeline_down:push(pkt)
+    end
 end
 
 -- Pump the pipeline. Returns a packet if one is available, otherwise nil
-function Pipe:pump (dt)
-    local num = self.pipeline:length()
+function Pipe:pump (dt, dir)
+    local pipeline = nil
+
+    if dir > 0 then
+        pipeline = self.pipeline_up
+    else
+        pipeline = self.pipeline_down
+    end
+
+    local num = pipeline:length()
     if num == 0 then return nil end
 
     local available = nil
     local num_fin = 0
 
+
     -- rotate through the queue, updating each packet
     local lead_pkt = nil
     while num > 0 do
-        local pkt = self.pipeline:pop()
+        local pkt = pipeline:pop()
         local pkt_dt = dt * pkt.speed
 
         -- if this is the lead packet
@@ -116,7 +138,7 @@ function Pipe:pump (dt)
 
         ::update::
         if pkt:update(pkt_dt) < 1 then
-            self.pipeline:push(pkt)
+            pipeline:push(pkt)
             lead_pkt = pkt
         else
             -- when packet is at the end (t >= 1) then it is not put back onto
@@ -159,16 +181,20 @@ function love.draw()
 end
 
 function love.update (dt)
-    Pab:pump(dt)
-    Pcd:pump(dt)
+    Pab:pump(dt, -1)
+    Pcd:pump(dt, -1)
+    Pab:pump(dt, 1)
+    Pcd:pump(dt, 1)
 
     T = T + 1
     if T % 2 then
+        local dir = math.random(0, 1)
+        if not dir then dir = -1 end
         local r = math.random(1, 100)
-        if r < 15 then
-            Pab:send(Packet.new(math.prandom(0.25, 1.5)))
-        elseif r > 15 and r < 31 then
-            Pcd:send(Packet.new(math.prandom(0.25, 1.5)))
+        if r < 30 then
+            Pab:send(Packet.new(math.prandom(0.25, 1.5)), dir)
+        elseif r > 30 and r < 61 then
+            Pcd:send(Packet.new(math.prandom(0.25, 1.5)), dir)
         end
     end
 end
