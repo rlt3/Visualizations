@@ -12,6 +12,7 @@ function Node.new (name, x, y)
         name = name,
         x = x,
         y = y,
+        pipe = nil,
     }
     return setmetatable(t, Node)
 end
@@ -21,7 +22,20 @@ function Node:__tostring ()
 end
 
 function Node:draw ()
-    love.graphics.circle("fill", self.x, self.y, 5)
+    love.graphics.circle("fill", self.x, self.y, 8)
+    self.pipe:draw()
+end
+
+function Node:add_pipe (pipe)
+    self.pipe = pipe
+end
+
+function Node:send (pkt)
+    self.pipe:send(pkt)
+end
+
+function Node:pump (dt)
+    self.pipe:pump(dt)
 end
 
 local Packet = {}
@@ -62,10 +76,11 @@ function Pipe.new (from, to)
     local t = { 
         from = Vector.new(from.x, from.y),
         to = Vector.new(to.x, to.y),
-        pipeline_up = Queue.new(),
-        pipeline_down = Queue.new(),
+        pipeline = Queue.new(),
     }
     t.angle = Vector.angle(t.from, t.to)
+    t.from.name = from.name
+    t.to.name = to.name
     return setmetatable(t, Pipe)
 end
 
@@ -73,47 +88,32 @@ function Pipe:__tostring ()
     return "Pipe from " .. self.from.name .." to ".. self.to.name
 end
 
-function Pipe.draw_packet (pkt, angle, dir)
+function Pipe.draw_packet (pkt, angle)
+    local s = 1.5 -- simple scaling factor
     love.graphics.push()
     love.graphics.translate(pkt.pos.x, pkt.pos.y)
     love.graphics.rotate(angle)
-    love.graphics.polygon("fill", -3,-1*dir,  3,-1*dir,  3,-4*dir,  -3,-4*dir)
+    love.graphics.polygon("fill", -3*s,-1*s,  3*s,-1*s,  3*s,-4*s,  -3*s,-4*s)
     love.graphics.pop()
 end
 
 function Pipe:draw ()
-    self.pipeline_up:map(function (pkt)
-        Pipe.draw_packet(pkt, self.angle, 1)
-    end)
-    self.pipeline_down:map(function (pkt)
-        Pipe.draw_packet(pkt, self.angle, -1)
+    self.pipeline:map(function (pkt)
+        Pipe.draw_packet(pkt, self.angle)
     end)
 end
 
 -- Input some packet to the pipeline
-function Pipe:send (pkt, dir)
+function Pipe:send (pkt)
     -- TODO: Need to add in a wait list for sending if last packet in queue
     -- has a time = 0
-    if dir > 0 then
-        pkt:reset(self.from, self.to)
-        self.pipeline_up:push(pkt)
-    else
-        pkt:reset(self.to, self.from)
-        self.pipeline_down:push(pkt)
-    end
+    pkt:reset(self.from, self.to)
+    self.pipeline:push(pkt)
 end
 
 -- Pump the pipeline. Returns a packet if one is available, otherwise nil
-function Pipe:pump (dt, dir)
-    local pipeline = nil
-
-    if dir > 0 then
-        pipeline = self.pipeline_up
-    else
-        pipeline = self.pipeline_down
-    end
-
-    local num = pipeline:length()
+function Pipe:pump (dt)
+    local num = self.pipeline:length()
     if num == 0 then return nil end
 
     local available = nil
@@ -123,7 +123,7 @@ function Pipe:pump (dt, dir)
     -- rotate through the queue, updating each packet
     local lead_pkt = nil
     while num > 0 do
-        local pkt = pipeline:pop()
+        local pkt = self.pipeline:pop()
         local pkt_dt = dt * pkt.speed
 
         -- if this is the lead packet
@@ -138,7 +138,7 @@ function Pipe:pump (dt, dir)
 
         ::update::
         if pkt:update(pkt_dt) < 1 then
-            pipeline:push(pkt)
+            self.pipeline:push(pkt)
             lead_pkt = pkt
         else
             -- when packet is at the end (t >= 1) then it is not put back onto
@@ -156,45 +156,51 @@ function Pipe:pump (dt, dir)
     return available
 end
 
+local Edge = {}
+Edge.__index = Edge
+
+-- Doesn't have to be its own object, rather it can simply be a function which
+-- inserts each 'side' of an pipe (A to B and B to A) into their respective
+-- Nodes. This way the logic of 'receive' and 'send' make sense referentially.
+function Edge.new (A, B)
+    A:add_pipe(Pipe.new(A, B))
+    B:add_pipe(Pipe.new(B, A))
+end
+
 function love.load()
     math.randomseed(os.time())
 
     A = Node.new("a", 25, 300)
     B = Node.new("b", 775, 300)
+    Edge.new(A, B)
 
     C = Node.new("c", 25, 575)
     D = Node.new("d", 775, 25)
+    Edge.new(C, D)
 
-    Pab = Pipe.new(A, B)
-    Pcd = Pipe.new(C, D)
+    Nodes = { A, B, C, D }
+
     T = 0
 end
 
 function love.draw()
-    A:draw()
-    B:draw()
-    C:draw()
-    D:draw()
-
-    Pab:draw()
-    Pcd:draw()
+    for i, node in ipairs(Nodes) do
+        node:draw()
+    end
 end
 
 function love.update (dt)
-    Pab:pump(dt, -1)
-    Pcd:pump(dt, -1)
-    Pab:pump(dt, 1)
-    Pcd:pump(dt, 1)
-
     T = T + 1
+
+    for i, node in ipairs(Nodes) do
+        node:pump(dt)
+    end
+
     if T % 2 then
-        local dir = math.random(0, 1)
-        if not dir then dir = -1 end
         local r = math.random(1, 100)
-        if r < 30 then
-            Pab:send(Packet.new(math.prandom(0.25, 1.5)), dir)
-        elseif r > 30 and r < 61 then
-            Pcd:send(Packet.new(math.prandom(0.25, 1.5)), dir)
+        if r < 50 then
+            local i = math.random(1, #Nodes)
+            Nodes[i]:send(Packet.new(math.prandom(0.25, 1.5)))
         end
     end
 end
