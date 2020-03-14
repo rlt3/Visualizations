@@ -4,6 +4,16 @@ local Queue = require("Queue")
 -- Gives a precise random decimal number given a minimum and maximum
 function math.prandom(min, max) return love.math.random() * (max - min) + min end
 
+local Network = {}
+Network.__index = Network
+Network.AllNodes = {}
+
+function Network.draw ()
+    for i, node in ipairs(Network.AllNodes) do
+        node:draw()
+    end
+end
+
 local Node = {}
 Node.__index = Node
 
@@ -12,9 +22,11 @@ function Node.new (name, x, y)
         name = name,
         x = x,
         y = y,
-        pipe = nil,
+        pipes = {},
     }
-    return setmetatable(t, Node)
+    t = setmetatable(t, Node)
+    table.insert(Network.AllNodes, t)
+    return t
 end
 
 function Node:__tostring ()
@@ -22,20 +34,26 @@ function Node:__tostring ()
 end
 
 function Node:draw ()
-    love.graphics.circle("fill", self.x, self.y, 8)
-    self.pipe:draw()
+    --love.graphics.circle("fill", self.x, self.y, 8)
+    for k, pipe in pairs(self.pipes) do
+        pipe:draw()
+    end
 end
 
 function Node:add_pipe (pipe)
-    self.pipe = pipe
+    self.pipes[pipe.to.name] = pipe
 end
 
 function Node:send (pkt)
-    self.pipe:send(pkt)
+    for k, pipe in pairs(self.pipes) do
+        pipe:send(pkt:clone())
+    end
 end
 
 function Node:pump (dt)
-    self.pipe:pump(dt)
+    for k, pipe in pairs(self.pipes) do
+        pipe:pump(dt)
+    end
 end
 
 local Packet = {}
@@ -50,6 +68,10 @@ function Packet.new (speed)
         speed = speed,
     }
     return setmetatable(t, Packet)
+end
+
+function Packet:clone ()
+    return Packet.new(self.speed)
 end
 
 -- Expects 'from' and 'to' to both be Vectors
@@ -89,11 +111,11 @@ function Pipe:__tostring ()
 end
 
 function Pipe.draw_packet (pkt, angle)
-    local s = 1.5 -- simple scaling factor
+    local s = 4 -- simple scaling factor
     love.graphics.push()
     love.graphics.translate(pkt.pos.x, pkt.pos.y)
     love.graphics.rotate(angle)
-    love.graphics.polygon("fill", -3*s,-1*s,  3*s,-1*s,  3*s,-4*s,  -3*s,-4*s)
+    love.graphics.polygon("fill", 0,-1,  1*s,-1,  1*s,-2*s,  0,-2*s)
     love.graphics.pop()
 end
 
@@ -151,7 +173,7 @@ function Pipe:pump (dt)
     end
 
     -- A sanity check for the Queue and ordering. Should always be 1 at max
-    if num_fin > 1 then error("Dropped " .. num_fin - 1 .. " packets!") end
+    --if num_fin > 1 then error("Dropped " .. num_fin - 1 .. " packets!") end
 
     return available
 end
@@ -170,37 +192,52 @@ end
 function love.load()
     math.randomseed(os.time())
 
-    A = Node.new("a", 25, 300)
-    B = Node.new("b", 775, 300)
-    Edge.new(A, B)
+    local max = { x = love.graphics.getWidth(), y = love.graphics.getHeight() }
+    local center = { x = max.x / 2, y = max.y / 2 }
+    local s = 3.5 -- a scaling factor
 
-    C = Node.new("c", 25, 575)
-    D = Node.new("d", 775, 25)
-    Edge.new(C, D)
+    local a = Node.new("a", center.x + (s * 25), center.y + (s * 55))
+    local b = Node.new("b", center.x - (s * 25), center.y + (s * 55))
+    local c = Node.new("c", center.x + (s * 25), center.y + (s * 5))
+    local d = Node.new("d", center.x - (s * 25), center.y + (s * 5))
+    local e = Node.new("e", center.x + (s * 60), center.y - (s * 10))
+    local f = Node.new("f", center.x + (s *  8), center.y - (s * 30))
+    local g = Node.new("g", center.x - (s * 60), center.y - (s * 25))
+    local h = Node.new("h", center.x + (s * 43), center.y - (s * 45))
+    local i = Node.new("i", center.x - (s * 25), center.y - (s * 60))
 
-    Nodes = { A, B, C, D }
+    Edge.new(a, b)
+    Edge.new(a, c)
+    Edge.new(b, d)
+    Edge.new(c, d)
+    Edge.new(d, f)
+    Edge.new(d, g)
+    Edge.new(e, c)
+    Edge.new(e, h)
+    Edge.new(f, c)
+    Edge.new(f, h)
+    Edge.new(f, i)
+    Edge.new(g, i)
 
     T = 0
 end
 
 function love.draw()
-    for i, node in ipairs(Nodes) do
-        node:draw()
-    end
+    Network.draw()
 end
 
 function love.update (dt)
     T = T + 1
 
-    for i, node in ipairs(Nodes) do
+    for i, node in ipairs(Network.AllNodes) do
         node:pump(dt)
     end
 
     if T % 2 then
         local r = math.random(1, 100)
         if r < 50 then
-            local i = math.random(1, #Nodes)
-            Nodes[i]:send(Packet.new(math.prandom(0.25, 1.5)))
+            local i = math.random(1, #Network.AllNodes)
+            Network.AllNodes[i]:send(Packet.new(math.prandom(0.25, 1.5)))
         end
     end
 end
