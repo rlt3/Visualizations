@@ -29,7 +29,7 @@ end
 
 function Queue:back ()
     if self:length() == 0 then return nil end
-    return self[self.tail]
+    return self[self.tail - 1]
 end
 
 function Queue:map (f)

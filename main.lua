@@ -1,3 +1,4 @@
+require("a-star-lua/a-star")
 local Vector = require("Vector")
 local Queue = require("Queue")
 
@@ -12,6 +13,19 @@ function Network.draw ()
     for i, node in ipairs(Network.AllNodes) do
         node:draw()
     end
+end
+
+function is_neighbor (node, other) 
+    return node.pipes[other.name] ~= nil
+end
+
+-- Send a packet from Node m to Node n
+function Network.send (m, n)
+    local path = astar.path(m, n, Network.AllNodes, true, Network.is_neighbor)
+    if not path then
+        error("No path from " .. m.name .. " to " .. n.name)
+    end
+    m:route(Packet.new(path, math.prandom(0.25, 1.5)))
 end
 
 local Node = {}
@@ -34,10 +48,10 @@ function Node:__tostring ()
 end
 
 function Node:draw ()
-    --love.graphics.circle("fill", self.x, self.y, 8)
     for k, pipe in pairs(self.pipes) do
         pipe:draw()
     end
+    --love.graphics.circle("fill", self.x, self.y, 8)
 end
 
 function Node:add_pipe (pipe)
@@ -48,6 +62,11 @@ function Node:send (pkt)
     for k, pipe in pairs(self.pipes) do
         pipe:send(pkt:clone())
     end
+end
+
+-- Route a received packet to some intermediate destination
+function Node:route (pkt)
+    if not pkt.path then error("Cannot route packet without path") end
 end
 
 function Node:pump (dt)
@@ -125,10 +144,16 @@ function Pipe:draw ()
     end)
 end
 
+function Pipe:can_accept ()
+    if self.pipeline:length() == 0 then return true end
+    return self.pipeline:back().time > 0
+end
+
 -- Input some packet to the pipeline
 function Pipe:send (pkt)
     -- TODO: Need to add in a wait list for sending if last packet in queue
     -- has a time = 0
+    --if not self:can_accept() then return end
     pkt:reset(self.from, self.to)
     self.pipeline:push(pkt)
 end
@@ -173,7 +198,7 @@ function Pipe:pump (dt)
     end
 
     -- A sanity check for the Queue and ordering. Should always be 1 at max
-    --if num_fin > 1 then error("Dropped " .. num_fin - 1 .. " packets!") end
+    if num_fin > 1 then error("Dropped " .. num_fin - 1 .. " packets!") end
 
     return available
 end
@@ -234,10 +259,10 @@ function love.update (dt)
     end
 
     if T % 2 then
-        local r = math.random(1, 100)
-        if r < 50 then
+        --local r = math.random(1, 100)
+        --if r < 75 then
             local i = math.random(1, #Network.AllNodes)
             Network.AllNodes[i]:send(Packet.new(math.prandom(0.25, 1.5)))
-        end
+        --end
     end
 end
