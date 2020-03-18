@@ -9,25 +9,6 @@ local Network = {}
 Network.__index = Network
 Network.AllNodes = {}
 
-function Network.draw ()
-    for i, node in ipairs(Network.AllNodes) do
-        node:draw()
-    end
-end
-
-function is_neighbor (node, other) 
-    return node.pipes[other.name] ~= nil
-end
-
--- Send a packet from Node m to Node n
-function Network.send (m, n)
-    local path = astar.path(m, n, Network.AllNodes, true, Network.is_neighbor)
-    if not path then
-        error("No path from " .. m.name .. " to " .. n.name)
-    end
-    m:route(Packet.new(path, math.prandom(0.25, 1.5)))
-end
-
 local Node = {}
 Node.__index = Node
 
@@ -36,7 +17,8 @@ function Node.new (name, x, y)
         name = name,
         x = x,
         y = y,
-        pipes = {},
+        pipes_in = {},
+        pipes_out = {},
     }
     t = setmetatable(t, Node)
     table.insert(Network.AllNodes, t)
@@ -48,53 +30,91 @@ function Node:__tostring ()
 end
 
 function Node:draw ()
-    for k, pipe in pairs(self.pipes) do
+    for k, pipe in pairs(self.pipes_in) do
         pipe:draw()
     end
     --love.graphics.circle("fill", self.x, self.y, 8)
 end
 
-function Node:add_pipe (pipe)
-    self.pipes[pipe.to.name] = pipe
+function Node:add_pipe_in (pipe)
+    self.pipes_in[pipe.from.name] = pipe
 end
 
-function Node:send (pkt)
-    for k, pipe in pairs(self.pipes) do
-        pipe:send(pkt:clone())
-    end
+function Node:add_pipe_out (pipe)
+    self.pipes_out[pipe.to.name] = pipe
 end
 
 -- Route a received packet to some intermediate destination
 function Node:route (pkt)
-    if not pkt.path then error("Cannot route packet without path") end
+    if not pkt.path then
+        error("Cannot route packet without path")
+    end
+
+    local dest = pkt:get_next_dest()
+    -- packet has made it to its destination
+    if not dest then
+        -- TODO: maybe reset the packet at this point and acquire it
+        return
+    end
+
+    local pipe = self.pipes_out[dest.name]
+    if not pipe then
+        error(self.name .. " does not have pipe out for " .. dest.name)
+        return
+    end
+
+    pipe:send(pkt)
 end
 
 function Node:pump (dt)
-    for k, pipe in pairs(self.pipes) do
-        pipe:pump(dt)
+    local received = {}
+    for k, pipe in pairs(self.pipes_in) do
+        table.insert(received, pipe:pump(dt))
+    end
+
+    for i, pkt in ipairs(received) do
+        if self ~= pkt.next_dest then
+            error("Poorly routed packet! Expected to be at node " .. pkt.next_dest.name .. " but instead at node " .. self.name)
+        end
+        self:route(pkt)
     end
 end
 
 local Packet = {}
 Packet.__index = Packet
 
-function Packet.new (speed)
+function Packet.new (speed, path)
     local t = {
         pos = nil,
         from = nil,
         to = nil,
         time = 0,
         speed = speed,
+        path = path,
+        path_index = 1,
+        next_dest = nil
     }
     return setmetatable(t, Packet)
 end
 
-function Packet:clone ()
-    return Packet.new(self.speed)
+-- Get the next destination for the packet. If there's no next destination then
+-- the packet is at the end of its route and this returns nil. Otherwise it
+-- returns a Node
+function Packet:get_next_dest ()
+    if self.path_index + 1 > #self.path then
+        self.path = nil
+        self.path_index = 1
+        self.next_dest = nil
+        return nil
+    end
+    self.path_index = self.path_index + 1
+    self.next_dest = self.path[self.path_index]
+    return self.next_dest
 end
 
--- Expects 'from' and 'to' to both be Vectors
-function Packet:reset (from, to)
+-- Sets the position and time from the 'from' and 'to' parameters which are
+-- expected to be Vectors
+function Packet:set_position (from, to)
     self.from = from
     self.to = to
     self.pos = self.from
@@ -154,7 +174,7 @@ function Pipe:send (pkt)
     -- TODO: Need to add in a wait list for sending if last packet in queue
     -- has a time = 0
     --if not self:can_accept() then return end
-    pkt:reset(self.from, self.to)
+    pkt:set_position(self.from, self.to)
     self.pipeline:push(pkt)
 end
 
@@ -165,7 +185,6 @@ function Pipe:pump (dt)
 
     local available = nil
     local num_fin = 0
-
 
     -- rotate through the queue, updating each packet
     local lead_pkt = nil
@@ -206,15 +225,45 @@ end
 local Edge = {}
 Edge.__index = Edge
 
--- Doesn't have to be its own object, rather it can simply be a function which
--- inserts each 'side' of an pipe (A to B and B to A) into their respective
--- Nodes. This way the logic of 'receive' and 'send' make sense referentially.
+-- Creates two pipes, one for each direction from A to B and B to A, and then
+-- adds those pipes as 'in' and 'out' for each node respectively
 function Edge.new (A, B)
-    A:add_pipe(Pipe.new(A, B))
-    B:add_pipe(Pipe.new(B, A))
+    local p1 = Pipe.new(A, B)
+    local p2 = Pipe.new(B, A)
+    A:add_pipe_out(p1)
+    A:add_pipe_in(p2)
+    B:add_pipe_out(p2)
+    B:add_pipe_in(p1)
 end
 
-function love.load()
+function Network.draw ()
+    for i, node in ipairs(Network.AllNodes) do
+        node:draw()
+    end
+end
+
+function Network.is_neighbor (node, other)
+    return node.pipes_out[other.name] ~= nil
+end
+
+-- Send a packet from Node m to Node n
+function Network.send (m, n)
+    local path = astar.path(m, n, Network.AllNodes, true, Network.is_neighbor)
+    if not path then
+        error("No path from " .. m.name .. " to " .. n.name)
+    end
+    m:route(Packet.new(math.prandom(0.25, 1.5), path))
+end
+
+function love.conf (t)
+    t.window.title = "Network Flow"
+    t.window.icon = nil -- Filepath to an image to use as the window's icon (string)
+    t.window.width = 800
+    t.window.height = 600
+    t.gammacorrect = true
+end
+
+function love.load ()
     math.randomseed(os.time())
 
     local max = { x = love.graphics.getWidth(), y = love.graphics.getHeight() }
@@ -247,7 +296,7 @@ function love.load()
     T = 0
 end
 
-function love.draw()
+function love.draw ()
     Network.draw()
 end
 
@@ -258,11 +307,14 @@ function love.update (dt)
         node:pump(dt)
     end
 
-    if T % 2 then
-        --local r = math.random(1, 100)
-        --if r < 75 then
-            local i = math.random(1, #Network.AllNodes)
-            Network.AllNodes[i]:send(Packet.new(math.prandom(0.25, 1.5)))
-        --end
+    if T % 5 then
+        local m = math.random(1, #Network.AllNodes)
+        local n = m
+        while n == m do
+            n = math.random(1, #Network.AllNodes)
+        end
+        local a = Network.AllNodes[m]
+        local b = Network.AllNodes[n]
+        Network.send(a, b)
     end
 end
