@@ -1,3 +1,4 @@
+local moonshine = require("moonshine")
 require("a-star-lua/a-star")
 local Vector = require("Vector")
 local Queue = require("Queue")
@@ -9,17 +10,25 @@ local Network = {}
 Network.__index = Network
 Network.AllNodes = {}
 
+local Packet = {}
+Packet.__index = Packet
+
 local Node = {}
 Node.__index = Node
 
-function Node.new (name, x, y)
+function Node.new (name, x, y, num_packets)
     local t = { 
         name = name,
         x = x,
         y = y,
         pipes_in = {},
         pipes_out = {},
+        packets = Queue.new(), -- queue of packets available for doing work
+        work = Queue.new(),    -- queue of work (paths) for packets
     }
+    for i = 1, num_packets do
+        t.packets:push(Packet.new(math.prandom(0.25, 1.5)))
+    end
     t = setmetatable(t, Node)
     table.insert(Network.AllNodes, t)
     return t
@@ -44,7 +53,21 @@ function Node:add_pipe_out (pipe)
     self.pipes_out[pipe.to.name] = pipe
 end
 
--- Route a received packet to some intermediate destination
+-- Add a path for the Node route a packet with when the Node updates
+function Node:add_work (path)
+    self.work:push(path)
+end
+
+function Node:do_work ()
+    if self.packets:length() == 0 or self.work:length() == 0 then return end
+    local pkt = self.packets:pop()
+    local path = self.work:pop()
+    pkt:set_path(path)
+    self:route(pkt)
+end
+
+-- Route a packet to some intermediate destination. If the packet has reached
+-- its destination, then add it to the Node's list of available packets
 function Node:route (pkt)
     if not pkt.path then
         error("Cannot route packet without path")
@@ -53,7 +76,7 @@ function Node:route (pkt)
     local dest = pkt:get_next_dest()
     -- packet has made it to its destination
     if not dest then
-        -- TODO: maybe reset the packet at this point and acquire it
+        self.packets:push(pkt)
         return
     end
 
@@ -66,10 +89,44 @@ function Node:route (pkt)
     pipe:send(pkt)
 end
 
-function Node:pump (dt)
+function Node:is_exhausted ()
+    return self.work:length() > self.packets:length()
+end
+
+function Node:has_max_packets ()
+    return self.packets:length() >= 50
+end
+
+function Node:has_packets ()
+    return self.packets:length() > 0
+end
+
+function Node:has_work ()
+    return self.work:length() > 0
+end
+
+function Node:update (dt)
+    if not self:has_max_packets() then
+        self:receive_packets(dt)
+    else
+        print(self.name .. " has reached max packets")
+    end
+
+    if self:has_packets() and self:has_work() then
+        self:do_work()
+    end
+end
+
+-- Receive packets from the input pipes and then attempt to route those packets
+function Node:receive_packets (dt)
     local received = {}
     for k, pipe in pairs(self.pipes_in) do
-        table.insert(received, pipe:pump(dt))
+        local finished = pipe:pump(dt)
+        if finished then
+            for i, pkt in ipairs(finished) do
+                table.insert(received, pkt)
+            end
+        end
     end
 
     for i, pkt in ipairs(received) do
@@ -80,21 +137,33 @@ function Node:pump (dt)
     end
 end
 
-local Packet = {}
-Packet.__index = Packet
-
-function Packet.new (speed, path)
+function Packet.new (speed)
     local t = {
         pos = nil,
         from = nil,
         to = nil,
         time = 0,
         speed = speed,
-        path = path,
+        path = nil,
         path_index = 1,
         next_dest = nil
     }
     return setmetatable(t, Packet)
+end
+
+function Packet:reset ()
+    self.path = nil
+    self.path_index = 1
+    self.next_dest = nil
+    self.pos = nil
+    self.from = nil
+    self.time = 0
+end
+
+function Packet:set_path (path)
+    self.path = path
+    self.path_index = 1
+    self.next_dest = nil
 end
 
 -- Get the next destination for the packet. If there's no next destination then
@@ -102,9 +171,7 @@ end
 -- returns a Node
 function Packet:get_next_dest ()
     if self.path_index + 1 > #self.path then
-        self.path = nil
-        self.path_index = 1
-        self.next_dest = nil
+        self:reset()
         return nil
     end
     self.path_index = self.path_index + 1
@@ -183,8 +250,7 @@ function Pipe:pump (dt)
     local num = self.pipeline:length()
     if num == 0 then return nil end
 
-    local available = nil
-    local num_fin = 0
+    local finished = {}
 
     -- rotate through the queue, updating each packet
     local lead_pkt = nil
@@ -210,16 +276,12 @@ function Pipe:pump (dt)
             -- when packet is at the end (t >= 1) then it is not put back onto
             -- the pipeline and the next packet will become the 'lead' packet
             lead_pkt = nil
-            available = pkt
-            num_fin = num_fin + 1
+            table.insert(finished, pkt)
         end
         num = num - 1
     end
 
-    -- A sanity check for the Queue and ordering. Should always be 1 at max
-    if num_fin > 1 then error("Dropped " .. num_fin - 1 .. " packets!") end
-
-    return available
+    return finished
 end
 
 local Edge = {}
@@ -242,6 +304,10 @@ function Network.draw ()
     end
 end
 
+function Network.random_node ()
+    return Network.AllNodes[math.random(1, #Network.AllNodes)]
+end
+
 function Network.is_neighbor (node, other)
     return node.pipes_out[other.name] ~= nil
 end
@@ -252,7 +318,7 @@ function Network.send (m, n)
     if not path then
         error("No path from " .. m.name .. " to " .. n.name)
     end
-    m:route(Packet.new(math.prandom(0.25, 1.5), path))
+    m:add_work(path)
 end
 
 function love.conf (t)
@@ -264,21 +330,24 @@ function love.conf (t)
 end
 
 function love.load ()
+    effect = moonshine(moonshine.effects.glow)
+    effect.glow.strength = 5
+
     math.randomseed(os.time())
 
     local max = { x = love.graphics.getWidth(), y = love.graphics.getHeight() }
     local center = { x = max.x / 2, y = max.y / 2 }
     local s = 3.5 -- a scaling factor
 
-    local a = Node.new("a", center.x + (s * 25), center.y + (s * 55))
-    local b = Node.new("b", center.x - (s * 25), center.y + (s * 55))
-    local c = Node.new("c", center.x + (s * 25), center.y + (s * 5))
-    local d = Node.new("d", center.x - (s * 25), center.y + (s * 5))
-    local e = Node.new("e", center.x + (s * 60), center.y - (s * 10))
-    local f = Node.new("f", center.x + (s *  8), center.y - (s * 30))
-    local g = Node.new("g", center.x - (s * 60), center.y - (s * 25))
-    local h = Node.new("h", center.x + (s * 43), center.y - (s * 45))
-    local i = Node.new("i", center.x - (s * 25), center.y - (s * 60))
+    local a = Node.new("a", center.x + (s * 25), center.y + (s * 55), 45)
+    local b = Node.new("b", center.x - (s * 25), center.y + (s * 55), 45)
+    local c = Node.new("c", center.x + (s * 25), center.y + (s * 5),  45)
+    local d = Node.new("d", center.x - (s * 25), center.y + (s * 5),  45)
+    local e = Node.new("e", center.x + (s * 60), center.y - (s * 10), 45)
+    local f = Node.new("f", center.x + (s *  8), center.y - (s * 30), 45)
+    local g = Node.new("g", center.x - (s * 60), center.y - (s * 25), 45)
+    local h = Node.new("h", center.x + (s * 43), center.y - (s * 45), 45)
+    local i = Node.new("i", center.x - (s * 25), center.y - (s * 60), 45)
 
     Edge.new(a, b)
     Edge.new(a, c)
@@ -294,27 +363,35 @@ function love.load ()
     Edge.new(g, i)
 
     T = 0
+    P = 1
+    DIR = 1
 end
 
 function love.draw ()
-    Network.draw()
+    effect(function()
+        Network.draw()
+    end)
 end
 
 function love.update (dt)
     T = T + 1
 
     for i, node in ipairs(Network.AllNodes) do
-        node:pump(dt)
+        node:update(dt)
     end
 
     if T % 5 then
-        local m = math.random(1, #Network.AllNodes)
-        local n = m
-        while n == m do
-            n = math.random(1, #Network.AllNodes)
+        if P >= math.random(1, 100) then
+            local a = Network.random_node()
+            local b = Network.random_node()
+            while not a == b and not a:is_exhausted() do
+                a = Network.random_node()
+            end
+            Network.send(a, b)
+            print(P)
+            if DIR == 1 and P < 100  then P = P + 1; end
+            if DIR == 1 and P == 100 then DIR = 0;   end
+            if DIR == 0 and P > 1    then P = P - 1; end
         end
-        local a = Network.AllNodes[m]
-        local b = Network.AllNodes[n]
-        Network.send(a, b)
     end
 end
