@@ -106,10 +106,11 @@ function Node:has_work ()
 end
 
 function Node:update (dt)
-    if not self:has_max_packets() then
-        self:receive_packets(dt)
-    else
-        print(self.name .. " has reached max packets")
+    local hold_pipe = self:has_max_packets()
+    self:receive_packets(dt, hold_pipe)
+
+    if hold_pipe and self:has_work() then
+        print(self.name .. " has " .. self.packets:length() .. " and " .. self.work:length() .. " work")
     end
 
     if self:has_packets() and self:has_work() then
@@ -118,14 +119,12 @@ function Node:update (dt)
 end
 
 -- Receive packets from the input pipes and then attempt to route those packets
-function Node:receive_packets (dt)
+function Node:receive_packets (dt, hold_pipe)
     local received = {}
     for k, pipe in pairs(self.pipes_in) do
-        local finished = pipe:pump(dt)
-        if finished then
-            for i, pkt in ipairs(finished) do
-                table.insert(received, pkt)
-            end
+        local finished = pipe:pump(dt, hold_pipe)
+        for i, pkt in ipairs(finished) do
+            table.insert(received, pkt)
         end
     end
 
@@ -245,12 +244,14 @@ function Pipe:send (pkt)
     self.pipeline:push(pkt)
 end
 
--- Pump the pipeline. Returns a packet if one is available, otherwise nil
-function Pipe:pump (dt)
-    local num = self.pipeline:length()
-    if num == 0 then return nil end
-
+-- Pump the pipeline. Returns a list of packets that have passed through or
+-- finished the pipe. The `hold_pipe` evaluates to True then pump will not
+-- return any packets and will instead hold 'finished' packets inside the pipe
+-- but update all other packets.
+function Pipe:pump (dt, hold_pipe)
     local finished = {}
+    local num = self.pipeline:length()
+    if num == 0 then return finished end
 
     -- rotate through the queue, updating each packet
     local lead_pkt = nil
@@ -269,7 +270,7 @@ function Pipe:pump (dt)
         end
 
         ::update::
-        if pkt:update(pkt_dt) < 1 then
+        if pkt:update(pkt_dt) < 1 or (hold_pipe and pkt.time >= 1) then
             self.pipeline:push(pkt)
             lead_pkt = pkt
         else
@@ -278,6 +279,7 @@ function Pipe:pump (dt)
             lead_pkt = nil
             table.insert(finished, pkt)
         end
+        ::continue::
         num = num - 1
     end
 
@@ -312,13 +314,35 @@ function Network.is_neighbor (node, other)
     return node.pipes_out[other.name] ~= nil
 end
 
--- Send a packet from Node m to Node n
-function Network.send (m, n)
+function Network.get_path (m, n)
     local path = astar.path(m, n, Network.AllNodes, true, Network.is_neighbor)
     if not path then
         error("No path from " .. m.name .. " to " .. n.name)
     end
+    return path
+end
+
+-- Add work for the Network to do
+function Network.add_work (m, n)
+    local path = Network.get_path(m, n)
     m:add_work(path)
+end
+
+-- Add more packets into the network
+function Network.add_packet (m, n)
+    local path = Network.get_path(m, n)
+    local pkt = Packet.new(math.prandom(0.25, 1.5))
+    pkt:set_path(path)
+    m:route(pkt)
+end
+
+function Network.two_random_nodes ()
+    local a = Network.random_node()
+    local b = Network.random_node()
+    while not a == b and not a:is_exhausted() do
+        a = Network.random_node()
+    end
+    return a, b
 end
 
 function love.conf (t)
@@ -339,15 +363,15 @@ function love.load ()
     local center = { x = max.x / 2, y = max.y / 2 }
     local s = 3.5 -- a scaling factor
 
-    local a = Node.new("a", center.x + (s * 25), center.y + (s * 55), 45)
-    local b = Node.new("b", center.x - (s * 25), center.y + (s * 55), 45)
-    local c = Node.new("c", center.x + (s * 25), center.y + (s * 5),  45)
-    local d = Node.new("d", center.x - (s * 25), center.y + (s * 5),  45)
-    local e = Node.new("e", center.x + (s * 60), center.y - (s * 10), 45)
-    local f = Node.new("f", center.x + (s *  8), center.y - (s * 30), 45)
-    local g = Node.new("g", center.x - (s * 60), center.y - (s * 25), 45)
-    local h = Node.new("h", center.x + (s * 43), center.y - (s * 45), 45)
-    local i = Node.new("i", center.x - (s * 25), center.y - (s * 60), 45)
+    local a = Node.new("a", center.x + (s * 25), center.y + (s * 55), 10)
+    local b = Node.new("b", center.x - (s * 25), center.y + (s * 55), 10)
+    local c = Node.new("c", center.x + (s * 25), center.y + (s * 5),  10)
+    local d = Node.new("d", center.x - (s * 25), center.y + (s * 5),  10)
+    local e = Node.new("e", center.x + (s * 60), center.y - (s * 10), 10)
+    local f = Node.new("f", center.x + (s *  8), center.y - (s * 30), 10)
+    local g = Node.new("g", center.x - (s * 60), center.y - (s * 25), 10)
+    local h = Node.new("h", center.x + (s * 43), center.y - (s * 45), 10)
+    local i = Node.new("i", center.x - (s * 25), center.y - (s * 60), 10)
 
     Edge.new(a, b)
     Edge.new(a, c)
@@ -363,7 +387,8 @@ function love.load ()
     Edge.new(g, i)
 
     T = 0
-    P = 1
+    Pwork = 50
+    Ppacket = 1
     DIR = 1
 end
 
@@ -381,17 +406,16 @@ function love.update (dt)
     end
 
     if T % 5 then
-        if P >= math.random(1, 100) then
-            local a = Network.random_node()
-            local b = Network.random_node()
-            while not a == b and not a:is_exhausted() do
-                a = Network.random_node()
-            end
-            Network.send(a, b)
-            print(P)
-            if DIR == 1 and P < 100  then P = P + 1; end
-            if DIR == 1 and P == 100 then DIR = 0;   end
-            if DIR == 0 and P > 1    then P = P - 1; end
+        -- Route existing packets
+        if Pwork >= math.random(1, 100) then
+            Network.add_work(Network.two_random_nodes())
+        end
+        -- But also gradually add more and more packets into system over time
+        if Ppacket >= math.random(1, 100) then
+            Network.add_packet(Network.two_random_nodes())
+            if DIR == 1 and Ppacket < 100  then Ppacket = Ppacket + 1; end
+            --if DIR == 1 and Ppacket == 100 then DIR = 0;   end
+            --if DIR == 0 and Ppacket > 1    then Ppacket = Ppacket - 1; end
         end
     end
 end
