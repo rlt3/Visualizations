@@ -109,9 +109,9 @@ function Node:update (dt)
     local hold_pipe = self:has_max_packets()
     self:receive_packets(dt, hold_pipe)
 
-    if hold_pipe and self:has_work() then
-        print(self.name .. " has " .. self.packets:length() .. " and " .. self.work:length() .. " work")
-    end
+    --if hold_pipe and self:has_work() then
+    --    print(self.name .. " has " .. self.packets:length() .. " and " .. self.work:length() .. " work")
+    --end
 
     if self:has_packets() and self:has_work() then
         self:do_work()
@@ -358,6 +358,8 @@ function love.load ()
     effect.glow.strength = 5
 
     math.randomseed(os.time())
+
+    love.window.setPosition(0, 0)
 
     local max = { x = love.graphics.getWidth(), y = love.graphics.getHeight() }
     local center = { x = max.x / 2, y = max.y / 2 }
