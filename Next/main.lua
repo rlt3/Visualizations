@@ -8,11 +8,6 @@ function love.conf (t)
     t.gammacorrect = true
 end
 
-function love.load ()
-    --love.window.setPosition(0, 0)
-
-end
-
 local Node = {}
 Node.__index = Node
 
