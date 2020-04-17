@@ -21,7 +21,7 @@ function Satellite.new (curve)
 end
 
 function Satellite:update (dt)
-    local scale = 0.5
+    local scale = 0.25
     self.t = self.t + self.dir
     if self.t >= 100 or self.t <= 1 then
         self.dir = -self.dir
@@ -32,7 +32,7 @@ function Satellite:update (dt)
         scale = -scale
     end
     self.size = self.size + scale
-    if self.size < 1 then self.size = 1 end
+    if self.size < 5 then self.size = 5 end
 end
 
 function Satellite:draw()
@@ -43,12 +43,13 @@ end
 local Orbit = {}
 Orbit.__index = Orbit
 
--- Simulate the 'orbiting' effect with a bezier curve where the middle two
--- control points, p2 and p3, are very near to p1 and p2 respectively
+-- Simulate the 'orbiting' effect with a cubic bezier curve where the middle
+-- two control points are equal to the start and end respectively. This creates
+-- a nice, rhytmic motion
 function Orbit.new (a, b)
     local p1 = a
-    local p2 = Vector.new(a.x + 5, a.y)
-    local p3 = Vector.new(b.x - 5, b.y)
+    local p2 = a
+    local p3 = b
     local p4 = b
 
     -- generate a single point on a cubic bezier curve
