@@ -8,45 +8,13 @@ function love.conf (t)
     t.gammacorrect = true
 end
 
-local Satellite = {}
-Satellite.__index = Satellite
-
-function Satellite.new (curve)
-    return setmetatable({
-        curve = curve,
-        t = 1,
-        dir = 1,
-        size = 20
-    }, Satellite)
-end
-
-function Satellite:update (dt)
-    local scale = 0.25
-    self.t = self.t + self.dir
-    if self.t >= 100 or self.t <= 1 then
-        self.dir = -self.dir
-    end
-    if self.t < 50 then
-        scale = scale
-    else
-        scale = -scale
-    end
-    self.size = self.size + scale
-    if self.size < 5 then self.size = 5 end
-end
-
-function Satellite:draw()
-    local point = self.curve.points[self.t]
-    love.graphics.circle("fill", point.x, point.y, self.size)
-end
-
 local Orbit = {}
 Orbit.__index = Orbit
 
 -- Simulate the 'orbiting' effect with a cubic bezier curve where the middle
 -- two control points are equal to the start and end respectively. This creates
 -- a nice, rhytmic motion
-function Orbit.new (a, b)
+function Orbit.new (a, b, angle)
     local p1 = a
     local p2 = a
     local p3 = b
@@ -75,16 +43,181 @@ function Orbit:draw ()
     end
 end
 
+local Satellite = {}
+Satellite.__index = Satellite
+
+function Satellite.new (curve)
+    local t = {
+        curve = curve,
+        t = 1,
+        dir = 1,
+        has_approached = false,
+    }
+    -- get the angle of the bezier curve and then project a point along that
+    -- along which is outside the viewport so the satellite approaches from
+    -- outside
+    local a = curve.points[1]
+    local b = curve.points[100]
+
+    -- swap the two end points if the satellite is coming from the background
+    -- rather than the foreground
+    local background = math.random(0, 1)
+    if background == 1 then
+        a, b = b, a
+        t.size = math.random(5, 20)
+    else
+        t.size = math.random(20, 35)
+    end
+
+    local angle = Vector.angle(b, a)
+    local dist = Vector.distance(a, b)
+    local pos = point_on_circle(angle, dist)
+
+    t.pos = pos
+    t.orig = pos
+    t.dest = b
+    t.time = 0
+    t.speedfactor = 1
+    t.background = background
+
+    return setmetatable(t, Satellite)
+end
+
+local SCALE = 0.25
+
+function Satellite:approach (dt)
+    self.time = self.time + (dt * 0.75)
+    self.pos = Vector.lerp(self.orig, self.dest, self.time)
+
+    -- scale the size of the satellite from whichever direction it is coming
+    if self.background == 1 then
+        self.size = self.size + SCALE
+    else
+        self.size = self.size - SCALE
+    end
+
+    -- If the satellite it close to its dest this it is caught in orbit
+    if self.time >= 0.8 then
+        -- find the closest point on the bezier curve that corresponds to the
+        -- current position of the satellite
+        local min = 1000
+        local min_point = 100
+        for i, point in ipairs(self.curve.points) do
+            local d = Vector.distance(self.pos, point)
+            if d < min then
+                min = d
+                min_point = i
+            end
+        end
+        -- and then update it's 't' to that closest point
+        self.has_approached = true
+        self.t = min_point
+        if self.background == 1 then
+            self.dir = -self.dir
+        end
+    end
+end
+
+-- Simply increment which point, 't', to draw along the bezier curve. Scale the
+-- size of the satellite up and down depending on which direction we're going
+-- along the curve
+function Satellite:orbit ()
+    local scale = SCALE
+    self.t = self.t + self.dir
+    if self.t >= 100 or self.t <= 1 then
+        self.dir = -self.dir
+    end
+    if self.t < 50 then
+        scale = SCALE
+    else
+        scale = -SCALE
+    end
+    self.size = self.size + scale
+    if self.size < 5 then self.size = 5 end
+    if self.size > 35 then self.size = 35 end
+end
+
+function Satellite:update (dt)
+    if self.has_approached then
+        self:orbit(dt)
+    else
+        self:approach(dt)
+    end
+end
+
+function Satellite:draw()
+    if self.has_approached then
+        local point = self.curve.points[self.t]
+        love.graphics.circle("fill", point.x, point.y, self.size)
+    else
+        love.graphics.circle("fill", self.pos.x, self.pos.y, self.size)
+    end
+end
+
+function point_on_circle (radians, radius)
+    local center = Vector.new(400, 300)
+    local r = radius or 300
+    local x = center.x + (math.cos(radians) * r)
+    local y = center.y + (math.sin(radians) * r)
+    return Vector.new(x, y)
+end
+
+Degrees = {}
+Satellites = {}
+SATi = 1
+
+function within_fifteen (degree)
+    for i, d in ipairs(Degrees) do
+        if math.abs(d - degree) <= 15 then
+            return true
+        end
+    end
+    return false
+end
+
+function random_orbit ()
+    local degree = math.random(1, 360)
+    while within_fifteen(degree) do
+        degree = math.random(1, 360)
+    end
+    table.insert(Degrees, degree)
+    local angle_a = math.rad(degree)
+    local angle_b = math.rad(degree + 180)
+    return Orbit.new(point_on_circle(angle_a), point_on_circle(angle_b))
+end
+
+function random_satellite ()
+    local path = random_orbit()
+    Satellites[SATi] = Satellite.new(path)
+    SATi = SATi + 1
+end
+
 function love.load ()
-    path = Orbit.new(Vector.new(50, 300), Vector.new(750, 300))
-    sat = Satellite.new(path)
+    local seed = os.time()
+    math.randomseed(seed)
+    print(seed)
+    random_satellite()
 end
 
 function love.draw ()
-    sat:draw()
+    for i, sat in ipairs(Satellites) do
+        sat:draw()
+    end
     love.graphics.rectangle("fill", 380, 280, 40, 40)
 end
 
+T = 0
+Cooldown = 5
+
 function love.update (dt)
-    sat:update(dt)
+    T = T + dt
+    if T > Cooldown then
+        if SATi < 7 and math.random(1, 100) < 5 then
+            Cooldown = T + 5
+            random_satellite()
+        end
+    end
+    for i, sat in ipairs(Satellites) do
+        sat:update(dt)
+    end
 end
