@@ -31,13 +31,20 @@ function love.load ()
     math.randomseed(seed)
     print(seed)
 
-    hiscore = Text.new("HISCORE: LEROY 1337", -10, 10, 16, "right")
-    title = Text.new("Orbit", 0, 200, 112)
-    start = Text.new("→ Press Start ←", 0, 400, 36)
-    lose = Text.new("You Lose", 0, 225, 112)
-    sad = Text.new(":(", 0, 225, 112)
+    Time = 0
 
-    StartToggleTime = 5
+    TitleMoveDone = false
+    StartFlashDone = false
+
+    -- move the Title and Start up from the bottom to a stopping point
+    TitleY = 1000
+    TitleYStop = 200
+    StartY = 1200
+    StartYStop = 400
+
+    -- for handling when to start and stop flashing the 'press start' text
+    StartToggleTime = 0
+    StartToggleStop = 0
     StartFlashTime = 0
     StartFlashColors = {
         {0, 0, 0},
@@ -45,12 +52,22 @@ function love.load ()
     }
     StartFlashIdx = 1
 
+    -- for keeping track of score
+    ScoreTally = 0
+
+    hiscore = Text.new("HISCORE: LEROY 1337", -10, 10, 16, "right")
+    title = Text.new("Orbit", 0, TitleY, 112)
+    start = Text.new("Press Start", 0, StartY, 36)
+    lose = Text.new("You Lose", 0, 225, 112)
+    sad = Text.new(":(", 0, 225, 112)
+
     ShootDir = {
         { x =  1, y =  1 },
         { x = -1, y =  1 },
         { x =  1, y = -1 },
         { x = -1, y = -1 },
     }
+    ShootAt = 2.5 -- start shooting at 2.5 seconds
     ShootingStars = {}
     Stars = {}
     for i = 1, 72 do
@@ -88,11 +105,43 @@ function love.draw ()
     end)
 end
 
-Time = 0
-ShootAt = 2.5
-
 function love.update (dt)
     Time = Time + dt
+
+    if not TitleMoveDone then
+        local diff = (300 * dt)
+        TitleY = TitleY - diff
+        StartY = StartY - diff
+        if TitleY < TitleYStop then
+            TitleY = TitleYStop
+            StartY = StartYStop
+            TitleMoveDone = true
+        end
+        title.y = TitleY
+        start.y = StartY
+        StartToggleTime = Time + 2.5
+        StartToggleStop = Time + 5
+    elseif not StartFlashDone then
+        if Time > StartToggleTime then
+            start.text = "→ Press Start ←"
+            if Time > StartFlashTime then
+                StartFlashTime = Time + 0.10
+                start.color = StartFlashColors[StartFlashIdx]
+                if StartFlashIdx == 1 then
+                    StartFlashIdx = 2
+                else
+                    StartFlashIdx = 1
+                end
+            end
+        end
+        if Time > StartToggleStop then
+            StartFlashDone = true
+        end
+    else
+        title.display = false
+        start.display = false
+        hiscore.text = "SCORE: " .. tostring(ScoreTally)
+    end
 
     scanline_phase = scanline_phase + 0.25
     if math.random(0, 1) > 0 then
@@ -102,18 +151,6 @@ function love.update (dt)
     end
     ScreenShader.scanlines.phase = scanline_phase
     ScreenShader.scanlines.frequency = scanline_freq
-
-    if Time > StartToggleTime then
-        if Time > StartFlashTime then
-            StartFlashTime = Time + 0.10
-            start.color = StartFlashColors[StartFlashIdx]
-            if StartFlashIdx == 1 then
-                StartFlashIdx = 2
-            else
-                StartFlashIdx = 1
-            end
-        end
-    end
 
     for i, star in ipairs(Stars) do
         local diff = star.dir * dt
@@ -137,4 +174,12 @@ function love.update (dt)
         star.speed = math.random(75, 125)
         table.insert(ShootingStars, star)
     end
+
+    -- I can just replace some update and draw functions (not the main ones)
+    -- with the appropriate one for the scene. I can still fill out the main
+    -- ones with the appropriate shaders and background stuff and then change
+    -- out the scene functions whenever appropriate.
+    --if Time > 8 then
+    --    love.update = SecondUpdate
+    --end
 end
