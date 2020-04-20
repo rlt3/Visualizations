@@ -1,4 +1,9 @@
+local moonshine = require("moonshine")
 local Vector = require("Vector")
+local Queue = require("Queue")
+local Text = require("Text")
+
+function math.prandom(min, max) return love.math.random() * (max - min) + min end
 
 function love.conf (t)
     t.window.title = "Network Flow"
@@ -8,216 +13,128 @@ function love.conf (t)
     t.gammacorrect = true
 end
 
-local Orbit = {}
-Orbit.__index = Orbit
-
--- Simulate the 'orbiting' effect with a cubic bezier curve where the middle
--- two control points are equal to the start and end respectively. This creates
--- a nice, rhytmic motion
-function Orbit.new (a, b, angle)
-    local p1 = a
-    local p2 = a
-    local p3 = b
-    local p4 = b
-
-    -- generate a single point on a cubic bezier curve
-    local point = function(t)
-        local x = math.pow(1-t,3) * p1.x + 3 * t * math.pow(1-t,2) * p2.x + 3 * math.pow(t,2) * (1-t) * p3.x + math.pow(t,3) * p4.x
-        local y = math.pow(1-t,3) * p1.y + 3 * t * math.pow(1-t,2) * p2.y + 3 * math.pow(t,2) * (1-t) * p3.y + math.pow(t,3) * p4.y
-        return Vector.new(x, y)
-    end
-
-    local t = {}
-    t.points = {}
-    local time = 0.0
-    for i = 1, 101 do
-        t.points[i] = point(time)
-        time = time + 0.01
-    end
-    return setmetatable(t, Orbit)
-end
-
-function Orbit:draw ()
-    for i, point in ipairs(self.points) do
-        love.graphics.circle("fill", point.x, point.y, 2)
-    end
-end
-
-local Satellite = {}
-Satellite.__index = Satellite
-
-function Satellite.new (curve)
-    local t = {
-        curve = curve,
-        t = 1,
-        dir = 1,
-        has_approached = false,
+function random_star ()
+    local size = math.prandom(2, 3.5)
+    local star = {
+        x = math.random(1, 800),
+        y = math.random(1, 600),
+        size = size,
+        max = size + 1,
+        min = size - 1,
+        dir = 1
     }
-    -- get the angle of the bezier curve and then project a point along that
-    -- along which is outside the viewport so the satellite approaches from
-    -- outside
-    local a = curve.points[1]
-    local b = curve.points[100]
-
-    -- swap the two end points if the satellite is coming from the background
-    -- rather than the foreground
-    local background = math.random(0, 1)
-    if background == 1 then
-        a, b = b, a
-        t.size = math.random(5, 20)
-    else
-        t.size = math.random(20, 35)
-    end
-
-    local angle = Vector.angle(b, a)
-    local dist = Vector.distance(a, b)
-    local pos = point_on_circle(angle, dist)
-
-    t.pos = pos
-    t.orig = pos
-    t.dest = b
-    t.time = 0
-    t.speedfactor = 1
-    t.background = background
-
-    return setmetatable(t, Satellite)
-end
-
-local SCALE = 0.25
-
-function Satellite:approach (dt)
-    self.time = self.time + (dt * 0.75)
-    self.pos = Vector.lerp(self.orig, self.dest, self.time)
-
-    -- scale the size of the satellite from whichever direction it is coming
-    if self.background == 1 then
-        self.size = self.size + SCALE
-    else
-        self.size = self.size - SCALE
-    end
-
-    -- If the satellite it close to its dest this it is caught in orbit
-    if self.time >= 0.8 then
-        -- find the closest point on the bezier curve that corresponds to the
-        -- current position of the satellite
-        local min = 1000
-        local min_point = 100
-        for i, point in ipairs(self.curve.points) do
-            local d = Vector.distance(self.pos, point)
-            if d < min then
-                min = d
-                min_point = i
-            end
-        end
-        -- and then update it's 't' to that closest point
-        self.has_approached = true
-        self.t = min_point
-        if self.background == 1 then
-            self.dir = -self.dir
-        end
-    end
-end
-
--- Simply increment which point, 't', to draw along the bezier curve. Scale the
--- size of the satellite up and down depending on which direction we're going
--- along the curve
-function Satellite:orbit ()
-    local scale = SCALE
-    self.t = self.t + self.dir
-    if self.t >= 100 or self.t <= 1 then
-        self.dir = -self.dir
-    end
-    if self.t < 50 then
-        scale = SCALE
-    else
-        scale = -SCALE
-    end
-    self.size = self.size + scale
-    if self.size < 5 then self.size = 5 end
-    if self.size > 35 then self.size = 35 end
-end
-
-function Satellite:update (dt)
-    if self.has_approached then
-        self:orbit(dt)
-    else
-        self:approach(dt)
-    end
-end
-
-function Satellite:draw()
-    if self.has_approached then
-        local point = self.curve.points[self.t]
-        love.graphics.circle("fill", point.x, point.y, self.size)
-    else
-        love.graphics.circle("fill", self.pos.x, self.pos.y, self.size)
-    end
-end
-
-function point_on_circle (radians, radius)
-    local center = Vector.new(400, 300)
-    local r = radius or 300
-    local x = center.x + (math.cos(radians) * r)
-    local y = center.y + (math.sin(radians) * r)
-    return Vector.new(x, y)
-end
-
-Degrees = {}
-Satellites = {}
-SATi = 1
-
-function within_fifteen (degree)
-    for i, d in ipairs(Degrees) do
-        if math.abs(d - degree) <= 15 then
-            return true
-        end
-    end
-    return false
-end
-
-function random_orbit ()
-    local degree = math.random(1, 360)
-    while within_fifteen(degree) do
-        degree = math.random(1, 360)
-    end
-    table.insert(Degrees, degree)
-    local angle_a = math.rad(degree)
-    local angle_b = math.rad(degree + 180)
-    return Orbit.new(point_on_circle(angle_a), point_on_circle(angle_b))
-end
-
-function random_satellite ()
-    local path = random_orbit()
-    Satellites[SATi] = Satellite.new(path)
-    SATi = SATi + 1
+    return star
 end
 
 function love.load ()
     local seed = os.time()
     math.randomseed(seed)
     print(seed)
-    random_satellite()
+
+    hiscore = Text.new("HISCORE: LEROY 1337", -10, 10, 16, "right")
+    title = Text.new("Orbit", 0, 200, 112)
+    start = Text.new("→ Press Start ←", 0, 400, 36)
+    lose = Text.new("You Lose", 0, 225, 112)
+    sad = Text.new(":(", 0, 225, 112)
+
+    StartToggleTime = 5
+    StartFlashTime = 0
+    StartFlashColors = {
+        {0, 0, 0},
+        {255, 255, 255},
+    }
+    StartFlashIdx = 1
+
+    ShootDir = {
+        { x =  1, y =  1 },
+        { x = -1, y =  1 },
+        { x =  1, y = -1 },
+        { x = -1, y = -1 },
+    }
+    ShootingStars = {}
+    Stars = {}
+    for i = 1, 72 do
+        table.insert(Stars, random_star())
+    end
+
+    scanline_phase = 0
+    scanline_freq = 800
+
+    ScreenShader = moonshine(moonshine.effects.dmg)
+             .chain(moonshine.effects.chromasep)
+             .chain(moonshine.effects.crt)
+             .chain(moonshine.effects.scanlines)
+    ScreenShader.dmg.palette = 'green'
+    ScreenShader.chromasep.angle = 0
+    ScreenShader.chromasep.radius = 2
+    ScreenShader.scanlines.thickness = 0.25
+    ScreenShader.scanlines.phase = scanline_phase
+    ScreenShader.scanlines.frequency = scanline_freq
 end
 
 function love.draw ()
-    for i, sat in ipairs(Satellites) do
-        sat:draw()
-    end
-    love.graphics.rectangle("fill", 380, 280, 40, 40)
+    ScreenShader(function()
+        for i, star in ipairs(Stars) do
+            love.graphics.circle("fill", star.x, star.y, star.size)
+        end
+        for i, star in ipairs(ShootingStars) do
+            love.graphics.circle("fill", star.x, star.y, star.size)
+        end
+        title:draw()
+        start:draw()
+        hiscore:draw()
+        --lose:draw()
+        --sad:draw()
+    end)
 end
 
-T = 0
-Cooldown = 5
+Time = 0
+ShootAt = 2.5
 
 function love.update (dt)
-    T = T + dt
-    if T > Cooldown then
-        if SATi < 7 and math.random(1, 100) < 5 then
-            Cooldown = T + 5
-            random_satellite()
+    Time = Time + dt
+
+    scanline_phase = scanline_phase + 0.25
+    if math.random(0, 1) > 0 then
+        scanline_freq = scanline_freq - 1
+    else
+        scanline_freq = scanline_freq + 1
+    end
+    ScreenShader.scanlines.phase = scanline_phase
+    ScreenShader.scanlines.frequency = scanline_freq
+
+    if Time > StartToggleTime then
+        if Time > StartFlashTime then
+            StartFlashTime = Time + 0.10
+            start.color = StartFlashColors[StartFlashIdx]
+            if StartFlashIdx == 1 then
+                StartFlashIdx = 2
+            else
+                StartFlashIdx = 1
+            end
         end
     end
-    for i, sat in ipairs(Satellites) do
-        sat:update(dt)
+
+    for i, star in ipairs(Stars) do
+        local diff = star.dir * dt
+        if star.size + diff < star.min or star.size + diff > star.max then
+            star.dir = -star.dir
+        else
+            star.size = star.size + diff
+        end
+    end
+
+    for i, star in ipairs(ShootingStars) do
+        local dir = star.dir
+        star.x = star.x + (dir.x * (star.speed * dt))
+        star.y = star.y + (dir.x * (star.speed * dt))
+    end
+
+    if Time > ShootAt then
+        ShootAt = ShootAt + 2.5
+        local star = random_star()
+        star.dir = ShootDir[math.random(1, #ShootDir)]
+        star.speed = math.random(75, 125)
+        table.insert(ShootingStars, star)
     end
 end
