@@ -1,3 +1,4 @@
+local moonshine = require("moonshine")
 local Vector = require("Vector")
 
 function love.conf (t)
@@ -72,20 +73,26 @@ function love.load ()
             Nodes[x][y] = Node.new(x, y)
         end
     end
+
+    Shader = moonshine(moonshine.effects.radial)
 end
 
 function love.draw ()
-    for x, col in pairs(Nodes) do
-        for y, n in pairs(col) do
-            love.graphics.circle("fill", n.pos.x, n.pos.y, n.size)
+    Shader(function()
+        for x, col in pairs(Nodes) do
+            for y, n in pairs(col) do
+                love.graphics.circle("fill", n.pos.x, n.pos.y, n.size)
+            end
         end
-    end
+    end)
 end
 
 function love.update (dt)
     --local n = Nodes[25 * 3][25 * 3]
     --n.size = n.size + (5 * dt)
     TIME = TIME + dt
+
+    Shader.radial.time = TIME
 
     if STATE == 1 then
         for x, col in pairs(Nodes) do
