@@ -63,7 +63,7 @@ function love.load ()
     HEIGHT = 600
     STRIDE = 25
     TIME = 0
-    STATE = 1
+    STATE = 3
     T = 0
 
     -- Starting from a negative stride gives a 'bleed' for scrolling
@@ -75,6 +75,7 @@ function love.load ()
     end
 
     Shader = moonshine(moonshine.effects.radial)
+             .chain(moonshine.effects.color)
 end
 
 function love.draw ()
@@ -93,6 +94,7 @@ function love.update (dt)
     TIME = TIME + dt
 
     Shader.radial.time = TIME
+    Shader.color.time = TIME
 
     if STATE == 1 then
         for x, col in pairs(Nodes) do
@@ -120,14 +122,14 @@ function love.update (dt)
                 n.pos = n.orig
             end
         end
-        if T >= 1 then
-            STATE = 1
-            T = 0
-        end
+        --if T >= 5 then
+        --    STATE = 1
+        --    T = 0
+        --end
     end
 
     T = T + dt
-    if T > 1 then T = 1 end
+    --if T > 1 then T = 1 end
 
     --local x_speed = 25 * math.cos(TIME)
     --local y_speed = 25 * math.sin(TIME)

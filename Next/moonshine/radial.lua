@@ -1,12 +1,10 @@
 return function(moonshine)
-  -- Barrel distortion adapted from Daniel Oaks (see commit cef01b67fd)
-  -- Added feather to mask out outside of distorted texture
-  local distortionFactor
   local shader = love.graphics.newShader[[
     extern number time;
 
-    float speed = 25;
-    float radius = 100;
+    //float speed = 0.25;
+    float speed = 1;
+    float radius = 250;
     vec2 scenter = vec2(400, 300); // screen center
     vec2 tcenter = vec2(0.5, 0.5); // texture center
 
@@ -18,21 +16,38 @@ return function(moonshine)
 
     bool point_in_circle (vec2 p)
     {
+        float r = (cos(time * 0.5) * 250) + radius;
         float xc = p.x - scenter.x;
         float yc = p.y - scenter.y;
-        return pow(xc,2) + pow(yc,2) < pow(radius,2);
+        return pow(xc,2) + pow(yc,2) < pow(r, 2);
     }
 
     vec4 effect (vec4 color, Image tex, vec2 uv, vec2 px)
     {
-        if (!point_in_circle(px))
-            return Texel(tex, uv);
+        //if (!point_in_circle(px))
+        //    return Texel(tex, uv);
+
+        int g = int(point_in_circle(px));
+        int b = int(!point_in_circle(px));
 
         float a = angle_from_center(px);
-        a += 25 * time;
-        float r = distance(uv, tcenter);
-        vec2 p = vec2(tcenter.x + (cos(a) * r), tcenter.y + (sin(a) * r));
+        a += speed * time;
+        float t = clamp(time, 0, 5);
+        float r = smoothstep(0, 8, distance(uv, tcenter));
+
+        float v = (sin(time) + 1) * 25;
+        float w = clamp(time, 0, 5);
+
+        vec2 p = vec2(uv.x + (cos(a) * g * v * r) + (sin(a) * b * w * r), 
+                      uv.y + (sin(a) * g * v * r) + (cos(a) * b * w * r));
         return Texel(tex, p);
+
+        //float a = angle_from_center(px);
+        //a += speed * time;
+        //float t = clamp(time, 0, 5);
+        //float r = smoothstep(0, 12, distance(uv, tcenter));
+        //vec2 p = vec2(uv.x + (cos(a) * t * r), uv.y + (sin(a) * t * r));
+        //return Texel(tex, p);
     }
   ]]
 
