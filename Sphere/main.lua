@@ -52,14 +52,45 @@ function love.load ()
     ]]
 
     Time = 0
-    Moon = Image("moon.jpg", 150, 150, 0.25, 0.50)
-    love.graphics.setShader(Shader)
+    Moon = Image("moon.jpg", 150, 150, 0.125, 0.25)
+
+    Angle = 0
+end
+
+local center = { x = 300, y = 300, z = 25 }
+local r = 280
+
+function draw_on_circle (angle)
+    local x = center.x + (math.cos(angle) * r)
+    local y = center.y
+    local z = center.z + (math.sin(angle) * 20)
+    love.graphics.circle("fill", x, y, z)
+end
+
+function update_orbit (angle)
+    -- our circular orbit is on a flat plane, so 'y' stays constant
+    Moon.pos.x = center.x + (math.cos(angle) * r)
+    Moon.pos.y = center.y
+    -- our 'z' is simply the scale, but moon has twice the heigh of the width
+    Moon.scale.w = 0.25 + (math.sin(angle) * 0.20)
+    Moon.scale.h = Moon.scale.w * 2
+    -- center on position
+    Moon.pos.x = Moon.pos.x - ((1024 * Moon.scale.w) / 2)
+    Moon.pos.y = Moon.pos.y - ((512 * Moon.scale.h) / 2)
+
+    local l = {
+        (Moon.pos.x - 300) / 300,
+        (Moon.pos.y - 300) / 300,
+        -((Moon.scale.w - 0.225) / 0.225),
+    }
+    Shader:send("lightDir", l);
 end
 
 function love.draw ()
     love.graphics.setShader(Shader)
     Moon:draw()
     love.graphics.setShader()
+    draw_on_circle(Angle)
 end
 
 function love.keypressed (key, unicode)
@@ -70,12 +101,7 @@ end
 
 function love.update (dt)
     Time = Time + dt
-
-    -- Mouse to UV coordinates: (-1,-1) at top-left, (1,1) bottom right
-    local m = Vector.new(love.mouse.getPosition())
-    m.x = (m.x - 300) / 300
-    m.y = (m.y - 300) / 300
-    local l = { m.x, m.y, 1 - m.x * m.x - m.y * m.y }
-    Shader:send("lightDir", l);
+    Angle = Angle - (0.5 * dt)
+    update_orbit(Angle)
     Shader:send("time", Time);
 end
