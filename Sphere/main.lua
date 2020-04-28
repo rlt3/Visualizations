@@ -41,7 +41,7 @@ function love.load ()
         // map UV normal onto sphere 
         vec2 texCoords = vec2(0.5 + (atan(normal.z, normal.x) / (2 * PI)),
                               0.5 - (asin(normal.y) / PI));
-        texCoords.x = mod(texCoords.x + time * 0.05, 1);
+        texCoords.x = mod(texCoords.x + time * 0.10, 1);
         vec3 texColor = Texel(tex, texCoords).xyz;  
 
         if (radius <= 1.0)
@@ -58,12 +58,13 @@ function love.load ()
 end
 
 local center = { x = 300, y = 300, z = 25 }
-local r = 225
+local r = 300
 
 function update_orbit (angle)
     -- our circular orbit is on a flat plane, so 'y' stays constant
     local x = center.x + (math.cos(angle) * r)
-    local y = center.y
+    --local y = center.y
+    local y = center.y + (math.sin(angle) * (r / 2))
     local z = 0.25 + (math.sin(angle) * 0.20)
     -- center on position
     Moon.pos.x = x - ((1024 * Moon.scale.w) / 2)
@@ -74,16 +75,26 @@ function update_orbit (angle)
     -- fit x,y,z into (-1,-1,-1) -> (1,1,1) coordinate space
     local l = {
         -((x - 300) / 300),
-        (y - 300) / 300,
+        -((y - 300) / 300),
         -((z - 0.225) / 0.225),
     }
     Shader:send("lightDir", l);
 end
 
+function draw_circle (angle)
+    local x = center.x + (math.cos(angle) * r)
+    local y = center.y + (math.sin(angle) * (r / 2))
+    --local y = center.y + (math.sin(angle / 2) * r)
+    local z = 25 + (math.sin(angle) * 20)
+    love.graphics.circle("fill", x, y, z)
+end
+
 function love.draw ()
+    love.graphics.circle("fill", 300, 300, 75)
     love.graphics.setShader(Shader)
     Moon:draw()
     love.graphics.setShader()
+    --draw_circle(Angle)
 end
 
 function love.keypressed (key, unicode)
