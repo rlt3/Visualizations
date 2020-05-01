@@ -25,6 +25,46 @@ function shuffle (t)
     end
 end
 
+function hsv2rgb (h, s, v)
+	local r, g, b
+	local i = math.floor(h * 6);
+	local f = h * 6 - i;
+	local p = v * (1 - s);
+	local q = v * (1 - f * s);
+	local t = v * (1 - (1 - f) * s);
+	i = i % 6
+	if i == 0 then r, g, b = v, t, p
+	elseif i == 1 then r, g, b = q, v, p
+	elseif i == 2 then r, g, b = p, v, t
+	elseif i == 3 then r, g, b = p, q, v
+	elseif i == 4 then r, g, b = t, p, v
+	elseif i == 5 then r, g, b = v, p, q
+	end
+	return r, g, b
+end
+
+function rgb2hsv (r, g, b)
+	r, g, b = r / 255, g / 255, b / 255
+	local max, min = math.max(r, g, b), math.min(r, g, b)
+	local h, s, v
+	v = max
+	local d = max - min
+	if max == 0 then s = 0 else s = d / max end
+	if max == min then
+		h = 0
+	else
+		if max == r then
+		h = (g - b) / d
+		if g < b then h = h + 6 end
+		elseif max == g then h = (b - r) / d + 2
+		elseif max == b then h = (r - g) / d + 4
+		end
+		h = h / 6
+	end
+	return h, s, v
+end
+
+
 function routine (iter, update)
     return coroutine.create(function ()
         iter(update)
@@ -80,17 +120,21 @@ end
 function iter_rect (update)
     local ctr = { x = 300, y = 300 }
     for r = 0, 300 do
-        for x = math.max(ctr.x - r, 0), math.min(ctr.x + r, Width - 1) do
-            update(x, math.max(ctr.y - r, 0))
+        local xleft = math.max(ctr.x - r, 0) 
+        local xright = math.min(ctr.x + r, Width - 1) 
+        local ytop = math.max(ctr.y - r, 0)
+        local ybot = math.min(ctr.y + r, Height - 1)
+        for x = xleft, xright do
+            update(x, ytop)
         end
-        for y = math.max(ctr.y - r, 0), math.min(ctr.y + r, Height - 1) do
-            update(math.min(ctr.x + r, Width - 1), y)
+        for y = ytop, ybot do
+            update(xright, y)
         end
-        for x = math.max(ctr.x - r, 0), math.min(ctr.x + r, Width - 1) do
-            update(x, math.min(ctr.y + r, Height - 1))
+        for x = xleft, xright do
+            update(x, ybot)
         end
-        for y = math.max(ctr.y - r, 0), math.min(ctr.y + r, Height - 1) do
-            update(math.max(ctr.x - r, 0), y)
+        for y = ytop, ybot do
+            update(xleft, y)
         end
         coroutine.yield()
     end
@@ -112,7 +156,7 @@ function iter_random (update)
     end
 end
 
-function update_noise (x, y)
+function noise (x, y)
     local n = perlin:noise(x*F*(1/64.0), y*F*(1/64.0)) * 1.0 +
               perlin:noise(x*F*(1/32.0), y*F*(1/32.0)) * 0.5 +
               perlin:noise(x*F*(1/16.0), y*F*(1/16.0)) * 0.25 +
@@ -124,25 +168,24 @@ function update_noise (x, y)
     Pixels:setPixel(x, y, n, n, n, 1)
 end
 
-function update_terrain (x, y)
-    local r, g, b, a = Pixels:getPixel(x, y)
-    local n = r
+function smooth (x, y)
+    local n = Pixels:getPixel(x, y)
+    local h, s, v
 
     if n < 0.25 then
-        r, g, b = 19, 55, 112
+        h, s, v = rgb2hsv(19, 55, 112)
     elseif n < 0.40 then
-        r, g, b = 66, 135, 245
+        h, s, v = rgb2hsv(66, 135, 245)
     elseif n < 0.50 then
-        r, g, b = 176, 153, 37
+        h, s, v = rgb2hsv(176, 153, 37)
     elseif n < 0.75 then
-        r, g, b = 29, 153, 33
+        h, s, v = rgb2hsv(29, 153, 33)
     else
-        r, g, b = 140, 33, 14
+        h, s, v = rgb2hsv(140, 33, 14)
     end
 
-    r, g, b = r*n, r*n, r*n
-
-    Pixels:setPixel(x, y, r / 255, g / 255, b / 255)
+    local r, g, b = hsv2rgb(h, s * n, v)
+    Pixels:setPixel(x, y, r, g, b)
 end
 
 function love.load ()
@@ -178,8 +221,8 @@ end
 function love.update (dt)
 	Time = Time + dt
     if Routines:length() == 0 then
-        Routines:push(routine(Iterators[math.random(1, #Iterators)], update_noise))
-        Routines:push(routine(Iterators[math.random(1, #Iterators)], update_terrain))
+        Routines:push(routine(Iterators[math.random(1, #Iterators)], noise))
+        Routines:push(routine(Iterators[math.random(1, #Iterators)], smooth))
     end
     if not rtn or coroutine.status(rtn) == "dead" then
         rtn = Routines:pop()
