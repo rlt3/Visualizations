@@ -82,14 +82,17 @@ function iter_scan (update, start, final, step)
     end
 end
 
+-- Updates pixels vertically going up
 function iter_scan_up (update)
     iter_scan(update, Height - 1, 0, -1)
 end
 
+-- Updates pixels vertically going down
 function iter_scan_down (update)
     iter_scan(update, 0, Height - 1, 1)
 end
 
+-- Updates pixels in an exapnding circular order from the center
 function iter_radius (update)
     local ctr = { x = 300, y = 300 }
 
@@ -117,6 +120,7 @@ function iter_radius (update)
     visited = nil
 end
 
+-- Updates pixels in an exapnding rectangular order from the center
 function iter_rect (update)
     local ctr = { x = 300, y = 300 }
 
@@ -149,6 +153,7 @@ function iter_rect (update)
     end
 end
 
+-- Shuffles all pixels random then updates them in shuffled order
 function iter_random (update)
     local pixels = {}
     for y = 0, Height - 1 do
@@ -157,6 +162,27 @@ function iter_random (update)
         end
     end
     shuffle(pixels)
+    for i = 1, #pixels do
+        update(pixels[i][1], pixels[i][2])
+        if i % (Width * 2) == 0 then
+            coroutine.yield()
+        end
+    end
+end
+
+-- Sorts pixels lowest-depth first and updates them in sorted order
+function iter_depth (update)
+    local pixels = {}
+    for y = 0, Height - 1 do
+        for x = 0, Width - 1 do
+            table.insert(pixels, {x, y, v = GetPixel(x, y)})
+        end
+    end
+
+    table.sort(pixels, function (a, b)
+        return a.v < b.v
+    end)
+
     for i = 1, #pixels do
         update(pixels[i][1], pixels[i][2])
         if i % (Width * 2) == 0 then
@@ -231,7 +257,8 @@ function love.load ()
         iter_scan_down,
         iter_rect,
         iter_scan_up,
-        iter_random
+        iter_random,
+        --iter_depth,
     }
 
     Routines = Queue.new()
@@ -244,8 +271,10 @@ end
 function love.update (dt)
 	Time = Time + dt
     if Routines:length() == 0 then
-        Routines:push(routine(Iterators[math.random(1, #Iterators)], noise))
-        Routines:push(routine(Iterators[math.random(1, #Iterators)], smooth))
+        --Routines:push(routine(Iterators[math.random(1, #Iterators)], noise))
+        --Routines:push(routine(Iterators[math.random(1, #Iterators)], smooth))
+        Routines:push(routine(iter_random, noise))
+        Routines:push(routine(iter_depth, smooth))
     end
     if not rtn or coroutine.status(rtn) == "dead" then
         rtn = Routines:pop()
