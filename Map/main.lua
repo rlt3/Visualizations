@@ -11,7 +11,7 @@ function math.prandom (min, max)
     return love.math.random() * (max - min) + min
 end
 
-function routine (iter, update)
+function new_routine (iter, update)
     return coroutine.create(function ()
         iter(update)
     end)
@@ -27,21 +27,21 @@ function iter_scan (update)
 end
 
 function iter_radius (update)
-    local center = { x = 300, y = 300 }
+    local ctr = { x = 300, y = 300 }
 
     local in_circle = function (x, y, radius)
-        local xc = x - center.x
-        local yc = y - center.y
+        local xc = x - ctr.x
+        local yc = y - ctr.y
         return ((xc * xc) + (yc * yc)) < (radius * radius)
     end
 
+    -- hashmap to speedup checking of already checked pixels
     local checked = {}
     for x = 0, Width do
         checked[x] = {}
     end
 
     local check = function (x, y, r)
-        if x < 0 or x > Width or y < 0 or y > Height then return end
         if checked[x][y] then return end
         if in_circle(x, y, r) then
             checked[x][y] = true
@@ -49,31 +49,35 @@ function iter_radius (update)
         end
     end
 
-    for r = 1, 600 do
-        for x = center.x - r, center.x + r do
-            for y = center.y - r, center.y + r do
+    -- repeatedly walks through a subset of the pixel space for every radius
+    -- enlargement to see if the pixels are inside the circle. if they are then
+    -- they are placed inside the 'checked' table
+    for r = 1, 450 do
+        -- Can speed this up by not iterating over all pixels again but only
+        -- a subset, e.g. a hollowed out rectangle
+        for x = math.max(0, ctr.x - r), math.min(Width - 1, ctr.x + r) do
+            for y = math.max(0, ctr.y - r), math.min(Height - 1, ctr.y + r) do
                 check(x, y, r)
             end
         end
         coroutine.yield()
-        print(r)
     end
 end
 
 function iter_rect (update)
-    local center = { x = 300, y = 300 }
+    local ctr = { x = 300, y = 300 }
     for r = 1, 300 do
-        for x = center.x - r, center.x + r do
-            update(x, center.y - r)
+        for x = ctr.x - r, ctr.x + r do
+            update(x, ctr.y - r)
         end
-        for y = center.y - r, center.y + r do
-            update(center.x + r, y)
+        for y = ctr.y - r, ctr.y + r do
+            update(ctr.x + r, y)
         end
-        for x = center.x - r, center.x + r do
-            update(x, center.y + r)
+        for x = ctr.x - r, ctr.x + r do
+            update(x, ctr.y + r)
         end
-        for y = center.y - r, center.y + r do
-            update(center.x - r, y)
+        for y = ctr.y - r, ctr.y + r do
+            update(ctr.x - r, y)
         end
         coroutine.yield()
     end
@@ -115,7 +119,7 @@ function update_noise (x, y)
 end
 
 function love.load ()
-    --love.graphics.setDefaultFilter("nearest", "nearest")
+    math.randomseed(os.time())
 
 	Time = 0
 	Width = 600
@@ -129,10 +133,8 @@ function love.load ()
     end
     Image = love.graphics.newImage(Pixels)
 
-    c = routine(iter_radius, update_noise)
-    --c = routine(iter_rect, update_noise)
-    --c = routine(iter_scan, update_noise)
-    --c = routine(iter_random, update_noise)
+    Iterators = { iter_radius, iter_rect, iter_scan, iter_random }
+    rtn = nil
 end
 
 function love.draw ()
@@ -141,7 +143,9 @@ end
 
 function love.update (dt)
 	Time = Time + dt
-    if coroutine.status(c) == "dead" then return end
-    coroutine.resume(c)
+    if not rtn or coroutine.status(rtn) == "dead" then
+        rtn = new_routine(Iterators[math.random(1, #Iterators)], update_noise)
+    end
+    coroutine.resume(rtn)
     Image = love.graphics.newImage(Pixels)
 end
