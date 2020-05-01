@@ -6,9 +6,22 @@ function love.keypressed (key, unicode)
     end
 end
 
+function math.clamp (min, max, v)
+    if v < min then return min end
+    if v > max then return max end
+    return v
+end
+
 -- Gives a precise random decimal number given a minimum and maximum
 function math.prandom (min, max)
-    return love.math.random() * (max - min) + min
+    return math.random() * (max - min) + min
+end
+
+function shuffle (t)
+    for i = #t, 2, -1 do
+        local j = math.random(i)
+        t[i], t[j] = t[j], t[i]
+    end
 end
 
 function new_routine (iter, update)
@@ -17,76 +30,68 @@ function new_routine (iter, update)
     end)
 end
 
-function iter_scan (update)
-    for y = 0, Height - 1 do
+function iter_scan (update, start, final, step)
+    for y = start, final, step do
         for x = 0, Width - 1 do
             update(x, y)
         end
-        coroutine.yield()
+        if y % 2 == 0 then
+            coroutine.yield()
+        end
     end
+end
+
+function iter_scan_up (update)
+    iter_scan(update, Height - 1, 0, -1)
+end
+
+function iter_scan_down (update)
+    iter_scan(update, 0, Height - 1, 1)
 end
 
 function iter_radius (update)
     local ctr = { x = 300, y = 300 }
 
-    local in_circle = function (x, y, radius)
-        local xc = x - ctr.x
-        local yc = y - ctr.y
-        return ((xc * xc) + (yc * yc)) < (radius * radius)
-    end
-
     -- hashmap to speedup checking of already checked pixels
-    local checked = {}
+    local visited = {}
     for x = 0, Width do
-        checked[x] = {}
+        visited[x] = {}
     end
 
-    local check = function (x, y, r)
-        if checked[x][y] then return end
-        if in_circle(x, y, r) then
-            checked[x][y] = true
-            update(x, y)
-        end
-    end
-
-    -- repeatedly walks through a subset of the pixel space for every radius
-    -- enlargement to see if the pixels are inside the circle. if they are then
-    -- they are placed inside the 'checked' table
-    for r = 1, 450 do
-        -- Can speed this up by not iterating over all pixels again but only
-        -- a subset, e.g. a hollowed out rectangle
-        for x = math.max(0, ctr.x - r), math.min(Width - 1, ctr.x + r) do
-            for y = math.max(0, ctr.y - r), math.min(Height - 1, ctr.y + r) do
-                check(x, y, r)
+    for radius = 1, 450 do
+        for degree = 0, 360, 0.05 do
+            local angle = math.rad(degree)
+            local x = ctr.x + (math.cos(angle) * radius)
+            local y = ctr.y + (math.sin(angle) * radius)
+            x = math.clamp(0,  Width - 1, math.floor(x))
+            y = math.clamp(0, Height - 1, math.floor(y))
+            if not visited[x][y] then
+                visited[x][y] = true
+                update(x, y)
             end
         end
         coroutine.yield()
     end
+
+    visited = nil
 end
 
 function iter_rect (update)
     local ctr = { x = 300, y = 300 }
-    for r = 1, 300 do
-        for x = ctr.x - r, ctr.x + r do
-            update(x, ctr.y - r)
+    for r = 0, 300 do
+        for x = math.max(ctr.x - r, 0), math.min(ctr.x + r, Width - 1) do
+            update(x, math.max(ctr.y - r, 0))
         end
-        for y = ctr.y - r, ctr.y + r do
-            update(ctr.x + r, y)
+        for y = math.max(ctr.y - r, 0), math.min(ctr.y + r, Height - 1) do
+            update(math.min(ctr.x + r, Width - 1), y)
         end
-        for x = ctr.x - r, ctr.x + r do
-            update(x, ctr.y + r)
+        for x = math.max(ctr.x - r, 0), math.min(ctr.x + r, Width - 1) do
+            update(x, math.min(ctr.y + r, Height - 1))
         end
-        for y = ctr.y - r, ctr.y + r do
-            update(ctr.x - r, y)
+        for y = math.max(ctr.y - r, 0), math.min(ctr.y + r, Height - 1) do
+            update(math.max(ctr.x - r, 0), y)
         end
         coroutine.yield()
-    end
-end
-
-function shuffle (t)
-    for i = #t, 2, -1 do
-        local j = math.random(i)
-        t[i], t[j] = t[j], t[i]
     end
 end
 
@@ -100,20 +105,20 @@ function iter_random (update)
     shuffle(pixels)
     for i = 1, #pixels do
         update(pixels[i][1], pixels[i][2])
-        if i % Width == 0 then
+        if i % (Width * 2) == 0 then
             coroutine.yield()
         end
     end
 end
 
 function update_noise (x, y)
-    local n = perlin:noise(x*(1/64.0), y*(1/64.0)) * 1.0 +
-              perlin:noise(x*(1/32.0), y*(1/32.0)) * 0.5 +
-              perlin:noise(x*(1/16.0), y*(1/16.0)) * 0.25 +
-              perlin:noise(x*(1/8.0),  y*(1/8.0))  * 0.125
+    local n = perlin:noise(x*F*(1/64.0), y*F*(1/64.0)) * 1.0 +
+              perlin:noise(x*F*(1/32.0), y*F*(1/32.0)) * 0.5 +
+              perlin:noise(x*F*(1/16.0), y*F*(1/16.0)) * 0.25 +
+              perlin:noise(x*F*(1/8.0),  y*F*(1/8.0))  * 0.125
     n = (n * 0.5) + 0.5
-    if x < 0 or x > Width or y < 0 or y > Height then
-        print(x, y)
+    if x < 0 or x > Width - 1 or y < 0 or y > Height - 1 then
+        error("Out of Range (" .. x .. ", " .. y .. ")")
     end
     Pixels:setPixel(x, y, n, n, n, 1)
 end
@@ -133,7 +138,13 @@ function love.load ()
     end
     Image = love.graphics.newImage(Pixels)
 
-    Iterators = { iter_radius, iter_rect, iter_scan, iter_random }
+    Iterators = { 
+        iter_radius,
+        iter_scan_down,
+        iter_rect,
+        iter_scan_up,
+        iter_random
+    }
     rtn = nil
 end
 
@@ -145,7 +156,9 @@ function love.update (dt)
 	Time = Time + dt
     if not rtn or coroutine.status(rtn) == "dead" then
         rtn = new_routine(Iterators[math.random(1, #Iterators)], update_noise)
+        F = math.prandom(0.10, 0.99)
     end
-    coroutine.resume(rtn)
+    local good, err = coroutine.resume(rtn)
+    if not good then print(err) end
     Image = love.graphics.newImage(Pixels)
 end
