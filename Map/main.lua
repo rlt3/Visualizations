@@ -119,23 +119,32 @@ end
 
 function iter_rect (update)
     local ctr = { x = 300, y = 300 }
+
     for r = 0, 300 do
-        local xleft = math.max(ctr.x - r, 0) 
-        local xright = math.min(ctr.x + r, Width - 1) 
-        local ytop = math.max(ctr.y - r, 0)
-        local ybot = math.min(ctr.y + r, Height - 1)
-        for x = xleft, xright do
+        -- get corners of rectangle subtracting by an extra 1 to keep within
+        -- pixel range of [0, Width) and [0, Height)
+        local xleft = ctr.x - r
+        local xright = ctr.x - 1 + r
+        local ytop = ctr.y - r
+        local ybot = ctr.y - 1 + r
+        -- update the perimeter of the rectangle without the corners
+        for x = xleft + 1, xright - 1 do
             update(x, ytop)
         end
-        for y = ytop, ybot do
+        for y = ytop + 1, ybot - 1 do
             update(xright, y)
         end
-        for x = xleft, xright do
+        for x = xleft + 1, xright - 1 do
             update(x, ybot)
         end
-        for y = ytop, ybot do
+        for y = ytop + 1, ybot - 1 do
             update(xleft, y)
         end
+        -- update each individual corner only once
+        update(xleft, ytop)
+        update(xright, ytop)
+        update(xleft, ybot)
+        update(xright, ybot)
         coroutine.yield()
     end
 end
@@ -162,14 +171,11 @@ function noise (x, y)
               perlin:noise(x*F*(1/16.0), y*F*(1/16.0)) * 0.25 +
               perlin:noise(x*F*(1/8.0),  y*F*(1/8.0))  * 0.125
     n = (n * 0.5) + 0.5
-    if x < 0 or x > Width - 1 or y < 0 or y > Height - 1 then
-        error("Out of Range (" .. x .. ", " .. y .. ")")
-    end
-    Pixels:setPixel(x, y, n, n, n, 1)
+    SetPixel(x, y, n, n, n, 1)
 end
 
 function smooth (x, y)
-    local n = Pixels:getPixel(x, y)
+    local n = GetPixel(x, y)
     local h, s, v
 
     if n < 0.25 then
@@ -185,7 +191,24 @@ function smooth (x, y)
     end
 
     local r, g, b = hsv2rgb(h, s * n, v)
-    Pixels:setPixel(x, y, r, g, b)
+    SetPixel(x, y, r, g, b)
+end
+
+function CheckRange (x, y)
+    if x < 0 or x > Width - 1 or y < 0 or y > Height - 1 then
+        error("Cannot index out of range pixel (" .. x .. ", " .. y .. ")")
+    end
+    return x, y
+end
+
+function GetPixel (x, y)
+    CheckRange(x, y)
+    return Pixels:getPixel(x, y)
+end
+
+function SetPixel (x, y, r, g, b, a)
+    CheckRange(x, y)
+    Pixels:setPixel(x, y, r, g, b, a or 1)
 end
 
 function love.load ()
