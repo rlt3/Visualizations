@@ -1,4 +1,5 @@
 local perlin = require("perlin")
+local Queue = require("Queue")
 
 function love.keypressed (key, unicode)
     if key == "escape" or key == "q" then
@@ -24,7 +25,7 @@ function shuffle (t)
     end
 end
 
-function new_routine (iter, update)
+function routine (iter, update)
     return coroutine.create(function ()
         iter(update)
     end)
@@ -123,6 +124,27 @@ function update_noise (x, y)
     Pixels:setPixel(x, y, n, n, n, 1)
 end
 
+function update_terrain (x, y)
+    local r, g, b, a = Pixels:getPixel(x, y)
+    local n = r
+
+    if n < 0.25 then
+        r, g, b = 19, 55, 112
+    elseif n < 0.40 then
+        r, g, b = 66, 135, 245
+    elseif n < 0.50 then
+        r, g, b = 176, 153, 37
+    elseif n < 0.75 then
+        r, g, b = 29, 153, 33
+    else
+        r, g, b = 140, 33, 14
+    end
+
+    r, g, b = r*n, r*n, r*n
+
+    Pixels:setPixel(x, y, r / 255, g / 255, b / 255)
+end
+
 function love.load ()
     math.randomseed(os.time())
 
@@ -145,7 +167,8 @@ function love.load ()
         iter_scan_up,
         iter_random
     }
-    rtn = nil
+
+    Routines = Queue.new()
 end
 
 function love.draw ()
@@ -154,10 +177,15 @@ end
 
 function love.update (dt)
 	Time = Time + dt
+    if Routines:length() == 0 then
+        Routines:push(routine(Iterators[math.random(1, #Iterators)], update_noise))
+        Routines:push(routine(Iterators[math.random(1, #Iterators)], update_terrain))
+    end
     if not rtn or coroutine.status(rtn) == "dead" then
-        rtn = new_routine(Iterators[math.random(1, #Iterators)], update_noise)
+        rtn = Routines:pop()
         F = math.prandom(0.10, 0.99)
     end
+    --if not rtn then return end
     local good, err = coroutine.resume(rtn)
     if not good then print(err) end
     Image = love.graphics.newImage(Pixels)
