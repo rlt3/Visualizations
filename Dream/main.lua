@@ -17,11 +17,10 @@ function love.load ()
     local data = love.image.newImageData(Width, Height)
     for x = 0, Width - 1 do
         for y = 0, Height - 1 do
-            local n = math.prandom(0, 1)
-            data:setPixel(x, y, n, n, n, 1)
+            data:setPixel(x, y, 1, 1, 1, 1)
         end
     end
-    Image = love.graphics.newImage(data)
+    Background = love.graphics.newImage(data)
 
     Shader = love.graphics.newShader[[
 	//	Classic Perlin 3D Noise 
@@ -98,72 +97,53 @@ function love.load ()
 	  return 2.2 * n_xyz;
 	}
 
-    const vec2 ctr = vec2(400, 300);
+    uniform Image forest1;
+    uniform Image forest2;
+    uniform Image forest3;
+    uniform Image mountain;
+    uniform Image lake;
 	extern number time;
 
-    float v1 (vec2 px)
+    float v4 (vec2 px)
     {
-        const float freq = 1 / 196.0;
-        const float amp = 0.8;
-        float t = (sin(0.5 * time) + 5) + time;
-        float n = 
-            noise(vec3(px.xy * (freq + (freq)),     t)) * amp +
-            noise(vec3(px.xy * (freq + (freq * 2)), t)) * amp * 0.5 +
-            noise(vec3(px.xy * (freq + (freq * 3)), t)) * amp * 0.25;
-        return n;
-    }
-
-    #define PI 3.1415926535897932384626433832795
-    float angle_from_center (vec2 p)
-    {
-        return atan(p.y - ctr.y, p.x - ctr.x);
-    }
-
-    vec2 pt (vec2 p, float t)
-    {
-        float angle = angle_from_center(p);
-        float dist = distance(p, ctr);
-        float a = angle + (0.5 * t);
-        return vec2(
-            ctr.x + (sin(t) * (ctr.x / 2)) + (cos(a) * dist),
-            ctr.y + (cos(t) * (ctr.y / 2)) + (sin(a) * dist)
-        );
-    }
-
-    float v2 (vec2 px)
-    {
-        float t = (sin(0.5 * time) + 5) + time;
-        const float freq = (1 / 196.0);
-        const float amp = 0.8;
-        return noise(vec3(pt(px, t) * (freq + (freq)),     t)) * amp  +
-               noise(vec3(pt(px, t) * (freq + (freq * 2)), t)) * amp * 0.5 +
-               noise(vec3(pt(px, t) * (freq + (freq * 3)), t)) * amp * 0.25;
-    }
-
-    float v3 (vec2 px)
-    {
-        float t = (sin(0.5 * time) + 5) + time;
-        const float freq = 1 / 96.0;
-        const float amp = 0.75;
-        return noise(vec3(pt(px, t) * freq, t)) * amp;
+        float t = 0.25 * time;
+        const float freq = (1 / 512.0);
+        const float amp = 1.5;
+        return noise(vec3(px * (freq + (freq)),     t)) * amp  +
+               noise(vec3(px * (freq + (freq * 2)), t)) * amp * 0.5 +
+               noise(vec3(px * (freq + (freq * 3)), t)) * amp * 0.25;
     }
 
     vec4 effect (vec4 color, Image tex, vec2 tc, vec2 px)
     {
-        float n = v3(px);
-        return vec4(
-                    mix(mix(vec3(1.0, 1.0, 0.0), vec3(1.0, 0.1, 0.0), n + 1.0),
-                        vec3(0.1, 0.0, 0.0), n * 0.5 + 0.5),
-                    1.0);
+        float n = v4(px);
+        float t = sin(0.5 * time) + 1;
+
+        if (n < -0.5)
+            return Texel(forest3, tc);
+        else if (n < -0.25)
+            return Texel(forest1, tc);
+        else if (n < 0)
+            return Texel(mountain, tc);
+        else if (n < 0.5)
+            return Texel(lake, tc);
+        else
+            return Texel(forest2, tc);
     }
     ]]
 
     love.graphics.setShader(Shader)
+    Shader:send("forest1", love.graphics.newImage("forest1.jpg"))
+    Shader:send("forest2", love.graphics.newImage("forest2.jpg"))
+    Shader:send("forest3", love.graphics.newImage("forest3.jpg"))
+    Shader:send("mountain", love.graphics.newImage("mountain.jpg"))
+    Shader:send("lake", love.graphics.newImage("lake.jpg"))
+
 	Time = 0
 end
 
 function love.draw ()
-    love.graphics.draw(Image)
+    love.graphics.draw(Background)
 end
 
 function love.update (dt)
