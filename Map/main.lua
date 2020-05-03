@@ -1,24 +1,6 @@
 local perlin = require("perlin")
 local Queue = require("Queue")
 
-function generate_another ()
-    F = math.prandom(0.10, 0.99)
-    rtn = nil
-    while Routines:length() > 0 do
-        Routines:pop()
-    end
-    Routines:push(routine(iter_random, noise))
-    Routines:push(routine(iter_depth, smooth))
-end
-
-function love.keypressed (key, unicode)
-    if key == "escape" or key == "q" then
-        love.event.quit()
-    elseif key == "r" then
-        generate_another()
-    end
-end
-
 function math.clamp (min, max, v)
     if v < min then return min end
     if v > max then return max end
@@ -75,7 +57,6 @@ function rgb2hsv (r, g, b)
 	end
 	return h, s, v
 end
-
 
 function routine (iter, update)
     return coroutine.create(function ()
@@ -204,41 +185,52 @@ function iter_depth (update)
 end
 
 function noise (x, y)
-    local n = perlin:noise(x * F * (1/128.0), y * F * (1/128.0)) * 1.0 +
-              perlin:noise(x * F * (1/64.0),  y * F * (1/64.0))  * 0.5 +
-              perlin:noise(x * F * (1/32.0),  y * F * (1/32.0))  * 0.25
+    local freq = 1 / (Width / 3)
+    local amp = 1.5
+    local xs = x + (Scale * RandMovement)
+    local ys = y + (Scale * RandMovement)
+    local n =
+        perlin:noise(xs * (freq + (freq)),     ys * (freq + (freq)))     * amp +
+        perlin:noise(xs * (freq + (freq * 2)), ys * (freq + (freq * 2))) * amp * 0.5 +
+        perlin:noise(xs * (freq + (freq * 4)), ys * (freq + (freq * 4))) * amp * 0.25
     n = (n * 0.5) + 0.5
     SetPixel(x, y, n, n, n, 1)
 end
 
-function smooth (x, y)
+function biome (x, y)
     local n = GetPixel(x, y)
     local h, s, v
 
-    -- deep water
-    if n < 0.57 then
+    -- trench
+    if n < 0.40 then
+        h, s, v = rgb2hsv(8, 38, 54)
+    -- ocean
+    elseif n < 0.54 then
         h, s, v = rgb2hsv(12, 70, 99)
-    -- shallow water
+    -- shore
     elseif n < 0.60 then
         h, s, v = rgb2hsv(23, 134, 191)
     -- sand
     elseif n < 0.63 then
         h, s, v = rgb2hsv(189, 175, 83)
     -- grass
-    elseif n < 0.80 then
+    elseif n < 0.73 then
         h, s, v = rgb2hsv(13, 92, 13)
     -- forest
-    elseif n < 0.90 then
+    elseif n < 0.84 then
         h, s, v = rgb2hsv(2, 56, 2)
+    -- hill
+    elseif n < 0.90 then
+        h, s, v = rgb2hsv(148, 142, 96)
     -- mountain
-    elseif n < 0.95 then
+    elseif n < 0.97 then
         h, s, v = rgb2hsv(91, 99, 90)
     -- snowy mountain
     else
         h, s, v = rgb2hsv(173, 181, 172)
     end
 
-    local r, g, b = hsv2rgb(h, s, v)
+    local r, g, b = hsv2rgb(h, s, math.clamp(v, 1, (v * n) + 0.25))
     SetPixel(x, y, r, g, b)
 end
 
@@ -251,28 +243,54 @@ end
 
 function GetPixel (x, y)
     CheckRange(x, y)
-    return Pixels:getPixel(x, y)
+    local t = Nodes[x][y]
+    return t.r, t.g, t.b, t.a
 end
 
 function SetPixel (x, y, r, g, b, a)
     CheckRange(x, y)
-    Pixels:setPixel(x, y, r, g, b, a or 1)
+    local t = Nodes[x][y]
+    t.r = r
+    t.g = g
+    t.b = b
+    t.a = a or 1
+end
+
+function generate_another ()
+    -- Random movement along the x,y axis for perlin noise
+    RandMovement = math.prandom(0, Width)
+    print(RandMovement)
+    rtn = nil
+    while Routines:length() > 0 do
+        Routines:pop()
+    end
+    Routines:push(routine(iter_random, noise))
+    Routines:push(routine(iter_depth, biome))
+end
+
+function love.keypressed (key, unicode)
+    if key == "escape" or key == "q" then
+        love.event.quit()
+    elseif key == "r" then
+        generate_another()
+    end
 end
 
 function love.load ()
     math.randomseed(os.time())
 
 	Time = 0
-	Width = love.graphics.getWidth()
-    Height = love.graphics.getHeight()
 
-    Pixels = love.image.newImageData(Width, Height)
+    Scale = 5
+    Width = love.graphics.getWidth() / Scale
+    Height = love.graphics.getHeight() / Scale
+    Nodes = {}
     for x = 0, Width - 1 do
+        Nodes[x] = {}
         for y = 0, Height - 1 do
-            Pixels:setPixel(x, y, 0, 0, 0, 1)
+            Nodes[x][y] = { r = 0, g = 0, b = 0, a = 1 }
         end
     end
-    Image = love.graphics.newImage(Pixels)
 
     Iterators = { 
         iter_radius,
@@ -288,7 +306,14 @@ function love.load ()
 end
 
 function love.draw ()
-    love.graphics.draw(Image)
+    local t = nil
+    for x = 0, Width - 1 do
+        for y = 0, Height - 1 do
+            t = Nodes[x][y]
+            love.graphics.setColor(t.r, t.g, t.b, t.a)
+            love.graphics.rectangle("fill", x * Scale, y * Scale, Scale, Scale)
+        end
+    end
 end
 
 function love.update (dt)
@@ -308,7 +333,6 @@ function love.update (dt)
             if not good then
                 error("Coroutine: " .. err)
             end
-            Image = love.graphics.newImage(Pixels)
         end
     end
 end
