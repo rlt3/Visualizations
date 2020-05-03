@@ -12,8 +12,8 @@ end
 function love.load ()
     love.window.setPosition(0, 0)
 
-	Width = 800
-    Height = 600
+	Width = love.graphics.getWidth()
+    Height = love.graphics.getHeight()
 
     -- generate background so shader will shade when drawing
     local data = love.image.newImageData(Width, Height)
@@ -103,7 +103,7 @@ function love.load ()
 	extern number time;
 
     #define PI 3.1415926535897932384626433832795
-    const vec2 pctr = vec2(400, 300);
+    vec2 pctr = vec2(love_ScreenSize.x / 2, love_ScreenSize.y / 2);
     const vec2 tctr = vec2(0.5, 0.5);
 
     float angle_from_center (vec2 p, vec2 ctr)
@@ -147,7 +147,6 @@ function love.load ()
     {
         const float radius = 0.75;
         const float softness = 0.70;
-        const vec2 res = vec2(800, 600);
         vec3 clr = vec3(0);
 
         // use perlin noise to generate values and scale from [-1,1] to [0,1]
@@ -164,7 +163,7 @@ function love.load ()
         clr = mix(a1, a2, pct);
 
         // apply a vignette for effect
-        vec2 pos = (px.xy / res.xy) - vec2(0.5);
+        vec2 pos = (px.xy / love_ScreenSize.xy) - vec2(0.5);
         float len = length(pos);
         float vignette = smoothstep(radius, radius - softness, len);
 
