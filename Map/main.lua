@@ -1,9 +1,21 @@
 local perlin = require("perlin")
 local Queue = require("Queue")
 
+function generate_another ()
+    F = math.prandom(0.10, 0.99)
+    rtn = nil
+    while Routines:length() > 0 do
+        Routines:pop()
+    end
+    Routines:push(routine(iter_random, noise))
+    Routines:push(routine(iter_depth, smooth))
+end
+
 function love.keypressed (key, unicode)
     if key == "escape" or key == "q" then
         love.event.quit()
+    elseif key == "r" then
+        generate_another()
     end
 end
 
@@ -192,10 +204,9 @@ function iter_depth (update)
 end
 
 function noise (x, y)
-    local n = perlin:noise(x*F*(1/64.0), y*F*(1/64.0)) * 1.0 +
-              perlin:noise(x*F*(1/32.0), y*F*(1/32.0)) * 0.5 +
-              perlin:noise(x*F*(1/16.0), y*F*(1/16.0)) * 0.25 +
-              perlin:noise(x*F*(1/8.0),  y*F*(1/8.0))  * 0.125
+    local n = perlin:noise(x * F * (1/128.0), y * F * (1/128.0)) * 1.0 +
+              perlin:noise(x * F * (1/64.0),  y * F * (1/64.0))  * 0.5 +
+              perlin:noise(x * F * (1/32.0),  y * F * (1/32.0))  * 0.25
     n = (n * 0.5) + 0.5
     SetPixel(x, y, n, n, n, 1)
 end
@@ -204,19 +215,30 @@ function smooth (x, y)
     local n = GetPixel(x, y)
     local h, s, v
 
-    if n < 0.25 then
-        h, s, v = rgb2hsv(19, 55, 112)
-    elseif n < 0.40 then
-        h, s, v = rgb2hsv(66, 135, 245)
-    elseif n < 0.50 then
-        h, s, v = rgb2hsv(176, 153, 37)
-    elseif n < 0.75 then
-        h, s, v = rgb2hsv(29, 153, 33)
+    -- deep water
+    if n < 0.57 then
+        h, s, v = rgb2hsv(12, 70, 99)
+    -- shallow water
+    elseif n < 0.60 then
+        h, s, v = rgb2hsv(23, 134, 191)
+    -- sand
+    elseif n < 0.63 then
+        h, s, v = rgb2hsv(189, 175, 83)
+    -- grass
+    elseif n < 0.80 then
+        h, s, v = rgb2hsv(13, 92, 13)
+    -- forest
+    elseif n < 0.90 then
+        h, s, v = rgb2hsv(2, 56, 2)
+    -- mountain
+    elseif n < 0.95 then
+        h, s, v = rgb2hsv(91, 99, 90)
+    -- snowy mountain
     else
-        h, s, v = rgb2hsv(140, 33, 14)
+        h, s, v = rgb2hsv(173, 181, 172)
     end
 
-    local r, g, b = hsv2rgb(h, s * n, v)
+    local r, g, b = hsv2rgb(h, s, v)
     SetPixel(x, y, r, g, b)
 end
 
@@ -241,8 +263,8 @@ function love.load ()
     math.randomseed(os.time())
 
 	Time = 0
-	Width = 600
-    Height = 600
+	Width = love.graphics.getWidth()
+    Height = love.graphics.getHeight()
 
     Pixels = love.image.newImageData(Width, Height)
     for x = 0, Width - 1 do
@@ -262,6 +284,7 @@ function love.load ()
     }
 
     Routines = Queue.new()
+    generate_another()
 end
 
 function love.draw ()
@@ -270,18 +293,22 @@ end
 
 function love.update (dt)
 	Time = Time + dt
-    if Routines:length() == 0 then
-        --Routines:push(routine(Iterators[math.random(1, #Iterators)], noise))
-        --Routines:push(routine(Iterators[math.random(1, #Iterators)], smooth))
-        Routines:push(routine(iter_random, noise))
-        Routines:push(routine(iter_depth, smooth))
+
+    if Routines:length() > 0 then
+        if not rtn or coroutine.status(rtn) == "dead" then
+            rtn = Routines:pop()
+        end
     end
-    if not rtn or coroutine.status(rtn) == "dead" then
-        rtn = Routines:pop()
-        F = math.prandom(0.10, 0.99)
+
+    if rtn then
+        if coroutine.status(rtn) == "dead" then
+            rtn = nil
+        else
+            local good, err = coroutine.resume(rtn)
+            if not good then
+                error("Coroutine: " .. err)
+            end
+            Image = love.graphics.newImage(Pixels)
+        end
     end
-    --if not rtn then return end
-    local good, err = coroutine.resume(rtn)
-    if not good then print(err) end
-    Image = love.graphics.newImage(Pixels)
 end
