@@ -12,6 +12,10 @@ function math.prandom (min, max)
     return math.random() * (max - min) + min
 end
 
+function norm (x, mu, sigma)
+    return math.exp(-0.5 * ((x-mu) * (x-mu) / (sigma * sigma))) / (sigma * 2.50662827463)
+end
+
 function shuffle (t)
     for i = #t, 2, -1 do
         local j = math.random(i)
@@ -186,16 +190,19 @@ end
 
 function noise (x, y)
     -- put coordinates into [0,1] range
-    local xs = (x / Width)  - 0.5
-    local ys = (y / Height) - 0.5
+    local xs = (x / (Width-1))
+    local ys = (y / (Height-1))
     local n =
         perlin:noise(xs * 6,  ys * 6)  * 1.00 +
         perlin:noise(xs * 12, ys * 12) * 0.50 +
         perlin:noise(xs * 24, ys * 24) * 0.25
     -- put output into [0,1] range
     n = (n * 0.5) + 0.5
-    -- redistribution of the noise: pushes valleys down, raises peaks
-    n = math.clamp(0, 1, math.pow(n, 0.75))
+    -- apply normal distribution over y coordinate and scale down noise which
+    -- makes oceans at poles
+    n = n * norm(ys, 0.5, 0.5)
+    -- raise lower values, keep higher values mostly the same
+    n = math.pow(n, 0.55)
     SetPixel(x, y, n, n, n, 1)
 end
 
