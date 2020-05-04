@@ -12,12 +12,12 @@ function math.prandom (min, max)
     return math.random() * (max - min) + min
 end
 
-function norm (x, mu, sigma)
-    return math.exp(-0.5 * ((x-mu) * (x-mu) / (sigma * sigma))) / (sigma * 2.50662827463)
-end
-
-function mix (x, y, a)
-    return x * (1 - a) + y * a
+function norm (x, mu, sig1, sig2)
+    -- this is a modification made by me. altering sig2 widens the curve such
+    -- that this will produce higher values over the curve normally. Since we
+    -- aren't using it for statistics but for smoothing, this makes sense
+    local sig2 = sig2 or sig1
+    return math.exp(-0.5 * ((x-mu) * (x-mu) / (sig2 * sig2))) / (sig1 * 2.50662827463)
 end
 
 function smoothstep (x, y, a)
@@ -198,22 +198,22 @@ function iter_depth (update)
 end
 
 function noise (x, y)
-    -- put coordinates into [0,1] range
-    local xs = (x / (Width-1))
-    local ys = (y / (Height-1))
-    local n =
-        perlin:noise(xs * 6,  ys * 6)  * 1.00 +
-        perlin:noise(xs * 12, ys * 12) * 0.50 +
-        perlin:noise(xs * 24, ys * 24) * 0.25
-    -- put output into [0,1] range
-    n = (n * 0.5) + 0.5
-    -- apply normal distribution over y coordinate and scale down noise which
-    -- makes oceans at poles
-    n = n * norm(ys, 0.5, 0.4)
-    -- raise lower values, keep higher values mostly the same
-    n = math.pow(n, 0.6)
-    -- smooth out n generating more consistent peaks
-    n = smoothstep(0.10, 1, n)
+    -- put coordinates into [0.5, 0.5] range
+
+    local xs = (x / (Width-1)) - 0.5
+    local ys = (y / (Height-1)) - 0.5
+
+    local n = perlin:noise(xs * 4, ys * 4)
+            + perlin:noise(xs * 20, ys * 20) * 0.50
+            + perlin:noise(xs * 50, ys * 50) * 0.25
+
+    -- simply clamp n to convert into range [0, 1]
+    if (n < 0) then n = 0 end
+    -- use normal distribution to input lower maximum edge so that smoothstep
+    -- produces higher values on the poles, producing snowy mountains there
+    n = smoothstep(0, norm(ys + 0.5, 0.5, 0.30), n)
+    -- bring out lower and middle values, keep higher values mostly same
+    n = math.pow(n, 0.35)
     SetPixel(x, y, n, n, n, 1)
 end
 
@@ -247,7 +247,7 @@ function biome (x, y)
         h, s, v = rgb2hsv(91, 99, 90)
     -- snowy mountain
     else
-        h, s, v = rgb2hsv(173, 181, 172)
+        h, s, v = rgb2hsv(228, 232, 227)
     end
 
     local r, g, b = hsv2rgb(h, s, math.clamp(v, 1, (v * n) + 0.25))
