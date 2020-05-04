@@ -16,6 +16,15 @@ function norm (x, mu, sigma)
     return math.exp(-0.5 * ((x-mu) * (x-mu) / (sigma * sigma))) / (sigma * 2.50662827463)
 end
 
+function mix (x, y, a)
+    return x * (1 - a) + y * a
+end
+
+function smoothstep (x, y, a)
+    local t = math.clamp(0.0, 1.0, (a - x) / (y - x))
+    return t * t * (3.0 - 2.0 * t);
+end
+
 function shuffle (t)
     for i = #t, 2, -1 do
         local j = math.random(i)
@@ -200,9 +209,11 @@ function noise (x, y)
     n = (n * 0.5) + 0.5
     -- apply normal distribution over y coordinate and scale down noise which
     -- makes oceans at poles
-    n = n * norm(ys, 0.5, 0.5)
+    n = n * norm(ys, 0.5, 0.4)
     -- raise lower values, keep higher values mostly the same
-    n = math.pow(n, 0.55)
+    n = math.pow(n, 0.6)
+    -- smooth out n generating more consistent peaks
+    n = smoothstep(0.10, 1, n)
     SetPixel(x, y, n, n, n, 1)
 end
 
