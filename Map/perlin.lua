@@ -25,12 +25,18 @@ local permutation = {151,160,137,91,90,15,
   138,236,205,93,222,114,67,29,24,72,243,141,128,195,78,66,215,61,156,180
 }
 
--- p is used to hash unit cube coordinates to [0, 255]
-for i=0,255 do
-    -- Convert to 0 based index table
-    perlin.p[i] = permutation[i+1]
-    -- Repeat the array to avoid buffer overflow in hash function
-    perlin.p[i+256] = permutation[i+1]
+function perlin:seed (randomize)
+    if randomize then
+        randomize(permutation)
+    end
+
+    -- p is used to hash unit cube coordinates to [0, 255]
+    for i=0,255 do
+        -- Convert to 0 based index table
+        perlin.p[i] = permutation[i+1]
+        -- Repeat the array to avoid buffer overflow in hash function
+        perlin.p[i+256] = permutation[i+1]
+    end
 end
 
 -- Return range: [-1, 1]
@@ -128,4 +134,5 @@ function perlin.lerp (t, a, b)
     return a + t * (b - a)
 end
 
+perlin:seed()
 return perlin

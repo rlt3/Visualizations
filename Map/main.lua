@@ -185,15 +185,17 @@ function iter_depth (update)
 end
 
 function noise (x, y)
-    local freq = 1 / (Width / 3)
-    local amp = 1.5
-    local xs = x + (Scale * RandMovement)
-    local ys = y + (Scale * RandMovement)
+    -- put coordinates into [0,1] range
+    local xs = (x / Width)  - 0.5
+    local ys = (y / Height) - 0.5
     local n =
-        perlin:noise(xs * (freq + (freq)),     ys * (freq + (freq)))     * amp +
-        perlin:noise(xs * (freq + (freq * 2)), ys * (freq + (freq * 2))) * amp * 0.5 +
-        perlin:noise(xs * (freq + (freq * 4)), ys * (freq + (freq * 4))) * amp * 0.25
+        perlin:noise(xs * 6,  ys * 6)  * 1.00 +
+        perlin:noise(xs * 12, ys * 12) * 0.50 +
+        perlin:noise(xs * 24, ys * 24) * 0.25
+    -- put output into [0,1] range
     n = (n * 0.5) + 0.5
+    -- redistribution of the noise: pushes valleys down, raises peaks
+    n = math.clamp(0, 1, math.pow(n, 0.75))
     SetPixel(x, y, n, n, n, 1)
 end
 
@@ -257,10 +259,8 @@ function SetPixel (x, y, r, g, b, a)
 end
 
 function generate_another ()
-    -- Random movement along the x,y axis for perlin noise
-    RandMovement = math.prandom(0, Width)
-    print(RandMovement)
     rtn = nil
+    perlin:seed(shuffle)
     while Routines:length() > 0 do
         Routines:pop()
     end
