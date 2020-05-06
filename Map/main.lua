@@ -68,8 +68,23 @@ function rgb2hsv (r, g, b)
 		end
 		h = h / 6
 	end
-	return h, s, v
+	return { h, s, v }
 end
+
+local Color = {
+    ["trench"]   = rgb2hsv(24, 74, 115),
+    ["ocean"]    = rgb2hsv(44, 107, 158),
+    ["shore"]    = rgb2hsv(64, 147, 214),
+    ["ice"]      = rgb2hsv(224, 224, 224),
+    ["tundra"]   = rgb2hsv(255, 250, 242),
+    ["grass"]    = rgb2hsv(13, 92, 13),
+    ["sand"]     = rgb2hsv(189, 175, 83),
+    ["forest"]   = rgb2hsv(2, 56, 2),
+    ["hill"]     = rgb2hsv(171, 166, 157),
+    ["glacier"]  = rgb2hsv(192, 237, 236),
+    ["clay"]     = rgb2hsv(145, 109, 77),
+    ["stone"]    = rgb2hsv(107, 110, 106)
+}
 
 function routine (iter, update)
     return coroutine.create(function ()
@@ -197,60 +212,80 @@ function iter_depth (update)
     end
 end
 
-function noise (x, y)
-    -- put coordinates into [0.5, 0.5] range
+-- return temperature over y-axis from [0,1] range
+function getTemp (y)
+    return (math.sin(6 * y - 1.5) / 2) + 0.5
+end
 
+function noise (x, y)
+    -- put coordinates into [-0.5, 0.5] range
     local xs = (x / (Width-1)) - 0.5
     local ys = (y / (Height-1)) - 0.5
 
-    local n = perlin:noise(xs * 4, ys * 4)
+    local elevation =
+              perlin:noise(xs * 4,  ys * 4)  * 1.00
             + perlin:noise(xs * 20, ys * 20) * 0.50
             + perlin:noise(xs * 50, ys * 50) * 0.25
 
-    -- simply clamp n to convert into range [0, 1]
-    if (n < 0) then n = 0 end
-    -- use normal distribution to input lower maximum edge so that smoothstep
-    -- produces higher values on the poles, producing snowy mountains there
-    n = smoothstep(0, norm(ys + 0.5, 0.5, 0.30), n)
-    -- bring out lower and middle values, keep higher values mostly same
-    n = math.pow(n, 0.35)
-    SetPixel(x, y, n, n, n, 1)
+    -- clamp and bring out middle values more, keeping highs mostly the same
+    elevation = math.clamp(0, 1, elevation)
+    elevation = math.pow(elevation, 0.40)
+
+    -- generate temperature which is based on latitude
+    temperature = getTemp(ys + 0.5)
+
+    SetPixel(x, y, elevation, temperature, 0, 1)
+end
+
+function mix (x, y, a)
+    return x * (1 - a) + y * a
+end
+
+function colormix (c1, c2, a)
+    assert(#c1 == #c2)
+    local t = {}
+    for i = 1, #c1 do
+        t[i] = mix(c1[i], c2[i], a)
+    end
+    return t
 end
 
 function biome (x, y)
-    local n = GetPixel(x, y)
-    local h, s, v
+    local elevation, temp = GetPixel(x, y)
 
-    -- trench
-    if n < 0.40 then
-        h, s, v = rgb2hsv(8, 38, 54)
-    -- ocean
-    elseif n < 0.54 then
-        h, s, v = rgb2hsv(12, 70, 99)
-    -- shore
-    elseif n < 0.60 then
-        h, s, v = rgb2hsv(23, 134, 191)
-    -- sand
-    elseif n < 0.63 then
-        h, s, v = rgb2hsv(189, 175, 83)
-    -- grass
-    elseif n < 0.73 then
-        h, s, v = rgb2hsv(13, 92, 13)
-    -- forest
-    elseif n < 0.84 then
-        h, s, v = rgb2hsv(2, 56, 2)
-    -- hill
-    elseif n < 0.90 then
-        h, s, v = rgb2hsv(148, 142, 96)
-    -- mountain
-    elseif n < 0.97 then
-        h, s, v = rgb2hsv(91, 99, 90)
-    -- snowy mountain
+    -- water level stops here
+    if elevation < 0.50 then
+        color = colormix(Color["trench"], Color["ocean"], elevation / 0.5)
+    elseif elevation < 0.75 then
+        if temp < 0.05 then
+            color = Color["ice"]
+        elseif temp < 0.15 then
+        -- tundra
+            color = colormix(Color["ice"], Color["tundra"], (temp - 0.05) / 0.10)
+        elseif temp < 0.85 then
+        -- grassland
+            color = colormix(Color["tundra"], Color["grass"], (temp - 0.15) / 0.70)
+        else
+        -- desert
+            color = colormix(Color["grass"], Color["sand"], (temp - 0.85) / 0.15)
+        end
     else
-        h, s, v = rgb2hsv(228, 232, 227)
+        if temp < 0.05 then
+            color = colormix(Color["ice"], Color["glacier"], (elevation - 0.75) / 0.25)
+        elseif temp < 0.15 then
+        -- glacier
+            color = colormix(Color["tundra"], Color["hill"], (elevation - 0.75) / 0.25)
+        elseif temp < 0.85 then
+        -- forest mountain
+            color = colormix(Color["grass"], Color["forest"], (elevation - 0.75) / 0.25)
+        else
+        -- stone mountain
+            color = colormix(Color["sand"], Color["stone"], (elevation - 0.75) / 0.25)
+        end
     end
 
-    local r, g, b = hsv2rgb(h, s, math.clamp(v, 1, (v * n) + 0.25))
+    local h, s, v = unpack(color)
+    local r, g, b = hsv2rgb(h, s, math.clamp(v, 1, (v * elevation) + 0.25))
     SetPixel(x, y, r, g, b)
 end
 
