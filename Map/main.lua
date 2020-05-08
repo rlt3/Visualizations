@@ -224,68 +224,38 @@ function noise (x, y)
 
     local elevation =
               perlin:noise(xs * 4,  ys * 4)  * 1.00
-            + perlin:noise(xs * 20, ys * 20) * 0.50
-            + perlin:noise(xs * 50, ys * 50) * 0.25
+            + perlin:noise(xs * 16, ys * 16) * 0.75
+            + perlin:noise(xs * 32, ys * 32) * 0.50
 
+    --local temperature =
+    --          perlin:noise(xs * 2,  ys * 2)  * 1.00
+    --        + perlin:noise(xs * 4, ys * 4) * 0.75
+    --        + perlin:noise(xs * 8, ys * 8) * 0.50
+
+    --local elevation =
+    --          perlin:noise(xs * 4,  ys * 4)  * 1.00
+    --        + perlin:noise(xs * 20, ys * 20) * 0.50
+    --        + perlin:noise(xs * 50, ys * 50) * 0.25
     -- clamp and bring out middle values more, keeping highs mostly the same
-    elevation = math.clamp(0, 1, elevation)
-    elevation = math.pow(elevation, 0.40)
+    --elevation = math.clamp(0, 1, elevation)
+    --elevation = math.pow(elevation, 0.40)
 
     -- generate temperature which is based on latitude
     temperature = getTemp(ys + 0.5)
+    --temperature = (temperature * 0.5) + 0.5
+    --temperature = math.clamp(0, 1, temperature)
+
+    elevation = (elevation * 0.5) + 0.5
+    elevation = math.clamp(0, 1, elevation)
 
     SetPixel(x, y, elevation, temperature, 0, 1)
 end
 
-function mix (x, y, a)
-    return x * (1 - a) + y * a
-end
-
-function colormix (c1, c2, a)
-    assert(#c1 == #c2)
-    local t = {}
-    for i = 1, #c1 do
-        t[i] = mix(c1[i], c2[i], a)
-    end
-    return t
-end
-
 function biome (x, y)
     local elevation, temp = GetPixel(x, y)
-
-    -- water level stops here
-    if elevation < 0.50 then
-        color = colormix(Color["trench"], Color["ocean"], elevation / 0.5)
-    elseif elevation < 0.75 then
-        if temp < 0.05 then
-            color = Color["ice"]
-        elseif temp < 0.15 then
-        -- tundra
-            color = colormix(Color["ice"], Color["tundra"], (temp - 0.05) / 0.10)
-        elseif temp < 0.85 then
-        -- grassland
-            color = colormix(Color["tundra"], Color["grass"], (temp - 0.15) / 0.70)
-        else
-        -- desert
-            color = colormix(Color["grass"], Color["sand"], (temp - 0.85) / 0.15)
-        end
-    else
-        if temp < 0.05 then
-            color = colormix(Color["ice"], Color["glacier"], (elevation - 0.75) / 0.25)
-        elseif temp < 0.15 then
-        -- glacier
-            color = colormix(Color["tundra"], Color["hill"], (elevation - 0.75) / 0.25)
-        elseif temp < 0.85 then
-        -- forest mountain
-            color = colormix(Color["grass"], Color["forest"], (elevation - 0.75) / 0.25)
-        else
-        -- stone mountain
-            color = colormix(Color["sand"], Color["stone"], (elevation - 0.75) / 0.25)
-        end
-    end
-
-    local h, s, v = unpack(color)
-    local r, g, b = hsv2rgb(h, s, math.clamp(v, 1, (v * elevation) + 0.25))
+    local bx = temp * BiomeWidth
+    local by = elevation * BiomeHeight
+    local r, g, b = BiomeLookup:getPixel(bx, by)
     SetPixel(x, y, r, g, b)
 end
 
@@ -353,6 +323,11 @@ function love.load ()
         iter_random,
         --iter_depth,
     }
+
+    --BiomeLookup = love.image.newImageData("biome.png")
+    BiomeLookup = love.image.newImageData("biome-block.png")
+    BiomeWidth = 255
+    BiomeHeight = 255
 
     Routines = Queue.new()
     generate_another()
