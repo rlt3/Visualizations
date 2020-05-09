@@ -5,8 +5,12 @@ local function is_vector(t)
     return getmetatable(t) == Vector
 end
 
-function Vector.new(x, y)
+function Vector.new (x, y)
     return setmetatable({ x = x or 0, y = y or 0 }, Vector)
+end
+
+function Vector:copy ()
+    return Vector.new(self.x, self.y)
 end
 
 -- operator overloading

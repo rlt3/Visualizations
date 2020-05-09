@@ -29,8 +29,7 @@ function love.load ()
         ["]"] = "]",
     }
 
-    --L = System.new(transition, '0', Width / 2, Height / 2, -90)
-    L = System.new(transition, 'bloom', Width / 2, Height / 2, 60)
+    L = System.new(transition, "0", Width / 2, Height / 2, -90)
 
     Time = 0
     Next = 0
@@ -43,7 +42,7 @@ end
 function love.update (dt)
 	Time = Time + dt
 
-    L:step(dt)
+    L:update(dt)
 
     --if Time > Next then
     --    Next = Next + (1 / 60)
