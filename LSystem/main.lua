@@ -15,6 +15,7 @@ end
 
 function love.load ()
     --love.window.setPosition(0, 0)
+    --love.graphics.setBlendMode("replace")
 
     Width = love.graphics.getWidth()
     Height = love.graphics.getHeight()
@@ -28,7 +29,8 @@ function love.load ()
         ["]"] = "]",
     }
 
-    L = System.new(transition, '0', Width / 2, Height / 2, -90)
+    --L = System.new(transition, '0', Width / 2, Height / 2, -90)
+    L = System.new(transition, 'bloom', Width / 2, Height / 2, 60)
 
     Time = 0
     Next = 0
@@ -41,10 +43,10 @@ end
 function love.update (dt)
 	Time = Time + dt
 
-    L:step()
+    L:step(dt)
 
     --if Time > Next then
-    --    Next = Next + (1 / 30)
+    --    Next = Next + (1 / 60)
     --    L:step()
     --end
 end
