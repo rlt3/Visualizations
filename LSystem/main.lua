@@ -22,14 +22,24 @@ function love.load ()
 
     math.randomseed(os.time())
 
+    --local transition = {
+    --    ["0"] = "1[0]0",
+    --    ["1"] = "11",
+    --    ["["] = "[",
+    --    ["]"] = "]",
+    --}
+    --L = System.new(transition, "0", Width / 2, Height / 2, -90)
+
     local transition = {
-        ["0"] = "1[0]0",
-        ["1"] = "11",
+        ["X"] = "F+[[X]-X]-F[-FX]+X",
+        ["F"] = "FF",
         ["["] = "[",
         ["]"] = "]",
+        ["-"] = "-",
+        ["+"] = "+",
     }
-
-    L = System.new(transition, "0", Width / 2, Height / 2, -90)
+    L = System.new(transition, "X", 150, Height - 150, -25)
+    --L = System.new(transition, "X", Width / 2, Height / 2, -25)
 
     Time = 0
     Next = 0
@@ -41,11 +51,5 @@ end
 
 function love.update (dt)
 	Time = Time + dt
-
     L:update(dt)
-
-    --if Time > Next then
-    --    Next = Next + (1 / 60)
-    --    L:step()
-    --end
 end
