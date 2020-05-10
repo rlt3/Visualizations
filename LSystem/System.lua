@@ -5,42 +5,61 @@ local Stack = require("Stack")
 local System = {}
 System.__index = System
 
-function System.new (transition, seed, startx, starty, angle)
-    local width = love.graphics.getWidth()
-    local height = love.graphics.getHeight()
-    local start = Vector.new(startx, starty)
+function str2queue (str)
+    local Q = Queue.new()
+    for c in str:gmatch"." do
+        Q:push(c)
+    end
+    return Q
+end
+
+function System.new (initial, transition, dispatch)
     local t = setmetatable({
-        width = Width,
-        height = Height,
         canvas = love.graphics.newCanvas(Width, Height),
+
         transition = transition,
-        startpos = start,
-        startangle = angle,
-        pos = start:copy(),
-        angle = angle,
-        active = nil,
+        dispatch = dispatch,
+
+        startpos = initial.position,
+        startangle = initial.angle,
+        pos = initial.position:copy(),
+        angle = initial.angle,
+        seed = initial.state,
+
         stack = Stack.new(),
-        statei = 1,
-        states = seed,
+        states = str2queue(initial.state),
+        active = nil,
     }, System)
     return t
 end
 
---
--- The system keeps a list of active and completed drawable objects. Active
--- objects are drawn over time. When it has reached its length, it is put into
--- the completed list. When there are no active objects then the completed list
--- is processed as when doing a state transition on a string. These transitions
--- create new active objects and the process starts again
---
-function System:update (dt)
-    local length = 5
-    local speed = 200
+-- Activates a new 'line' to be drawn over time with the current position and
+-- angle as values for it.
+function System:activate ()
+    self.active = {
+        a = self.pos:copy(),
+        b = self.pos:copy(),
+        angle = self.angle
+    }
+end
 
-    while self.active == nil do
-        if not self:step() then
-            self:transform()
-        end
+-- Returns whether the system is done with this current state queue.
+function System:done ()
+    return (self.active == nil and self.states:length() == 0)
+end
+
+-- Update the currently activated 'line'. If there's no active line then
+-- process the state queue until one is found. If one isn't found, then return.
+function System:update (dt)
+    local length = 2.5
+    local speed = 500
+
+    if self:done() then
+        return
+    end
+
+    if self.active == nil and not self:process() then
+        return
     end
 
     local a = self.active.a
@@ -54,14 +73,14 @@ function System:update (dt)
         local ydir = math.sin(rad)
         local b2 = Vector.new(b.x + (xdir * speed * dt),
                               b.y + (ydir * speed * dt))
-        --if Vector.distance(a, b2) > length then
-        --    b.x = b.x + (xdir * length)
-        --    b.y = b.y + (ydir * length)
-        --    dist = length + 1
-        --else
+        if Vector.distance(a, b2) > length then
+            b.x = b.x + (xdir * length)
+            b.y = b.y + (ydir * length)
+            dist = length + 1
+        else
             b.x = b2.x
             b.y = b2.y
-        --end
+        end
     end
 
     if dist > length then
@@ -74,55 +93,76 @@ function System:update (dt)
     end
 end
 
-function System:activate ()
-    self.active = {
-        a = self.pos:copy(),
-        b = self.pos:copy(),
-        angle = self.angle
-    }
+System.state = {}
+
+function System.state.draw (sys)
+    sys:activate()
+    return true
 end
 
--- step over each state in the state list
-function System:step ()
-    while self.statei < #self.states do
-        local c = self.states:sub(self.statei, self.statei)
-        self.statei = self.statei + 1
-        if c == "F" then
-            self:activate()
-            return true
-        elseif c == "X" then
-            -- do nothing
-        elseif c == "[" then
-            self.stack:push(self.angle)
-            self.stack:push(self.pos)
-        elseif c == "]" then
-            self.pos = self.stack:pop()
-            self.angle = self.stack:pop()
-        elseif c == "-" then
-            self.angle = self.angle + 25
-        elseif c == "+" then
-            self.angle = self.angle - 25
+function System.state.push (sys)
+    sys.stack:push(sys.angle)
+    sys.stack:push(sys.pos)
+end
+
+function System.state.pop (sys)
+    sys.pos = sys.stack:pop()
+    sys.angle = sys.stack:pop()
+end
+
+function System.state.angle (sys, val)
+    sys.angle = sys.angle + val
+end
+
+-- Process each state in the state queue via the dispatch table. The dispatch
+-- table's values should either be a function or a table with two values, a
+-- function and a value passed into that function. Those functions must be the
+-- above function.
+function System:process ()
+    while self.states:length() > 0 do
+        local c = self.states:pop()
+        local d = self.dispatch[c]
+
+        if d then
+            if type(d) == "function" then
+                if d(self) then
+                    return true
+                end
+            elseif type(d) == "table" then
+                d[1](self, d[2])
+            end
         end
     end
+
     return false
 end
 
--- transform the current state to the next one
-function System:transform ()
-    local gen = ""
-    for c in self.states:gmatch"." do
+-- Step the system, transforming each state
+function System:step ()
+    local generated = ""
+    for c in self.seed:gmatch"." do
         local s = self.transition[c]
-        if not s then
-            error("No transition found for state `" .. c .. "'")
+        if s then
+            generated = generated .. s
+        else
+            generated = generated .. c
         end
-        gen = gen .. s
     end
-    self.statei = 1
-    self.states = gen
+    self.seed = generated
+    self.states = str2queue(self.seed)
     self.active = nil
-    --self.angle = self.startangle
-    --self.pos = self.startpos:copy()
-    self.stack = Stack.new()
+    self.pos = self.startpos:copy()
+    self.angle = self.startangle
+    --self.canvas:renderTo(function()
+    --    love.graphics.clear()
+    --end)
+end
+
+-- Step the system n number of times
+function System:stepn (n)
+    for i = 1, n do
+        self:step()
+    end
 end
 
 function System:draw ()

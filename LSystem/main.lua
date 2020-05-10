@@ -1,6 +1,5 @@
 local System = require("System")
 local Vector = require("Vector")
-local Stack = require("Stack")
 
 -- Gives a precise random decimal number given a minimum and maximum
 function math.prandom (min, max)
@@ -22,24 +21,28 @@ function love.load ()
 
     math.randomseed(os.time())
 
-    --local transition = {
-    --    ["0"] = "1[0]0",
-    --    ["1"] = "11",
-    --    ["["] = "[",
-    --    ["]"] = "]",
-    --}
-    --L = System.new(transition, "0", Width / 2, Height / 2, -90)
+    local initial = {
+        state = "X",
+        position = Vector.new(150, Height),
+        angle = -60,
+    }
 
     local transition = {
         ["X"] = "F+[[X]-X]-F[-FX]+X",
         ["F"] = "FF",
-        ["["] = "[",
-        ["]"] = "]",
-        ["-"] = "-",
-        ["+"] = "+",
     }
-    L = System.new(transition, "X", 150, Height - 150, -25)
-    --L = System.new(transition, "X", Width / 2, Height / 2, -25)
+
+    local dispatch = {
+        ["X"] = nil,
+        ["F"] = System.state.draw,
+        ["["] = System.state.push,
+        ["]"] = System.state.pop,
+        ["-"] = { System.state.angle, 25  },
+        ["+"] = { System.state.angle, -25 },
+    }
+
+    L = System.new(initial, transition, dispatch)
+    L:stepn(6)
 
     Time = 0
     Next = 0
@@ -52,4 +55,9 @@ end
 function love.update (dt)
 	Time = Time + dt
     L:update(dt)
+
+    --if L:done() and Time > Next then
+    --    Next = Time + 0.5
+    --    L:step()
+    --end
 end
