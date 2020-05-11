@@ -38,10 +38,11 @@ function hsv2rgb (h, s, v)
 end
 
 function System.new (init, transition, dispatch)
-    local scale = 6
+    local scale = 10
     local width = love.graphics.getWidth() * scale
     local height = love.graphics.getHeight() * scale
-    local start = Vector.new(width * 0.25, height * 0.6)
+    --local start = Vector.new(width * 0.25, height * 0.6)
+    local start = Vector.new(width * 0.5, height * 0.75)
     init.position = start
     local t = setmetatable({
         canvas = love.graphics.newCanvas(width, height),
@@ -136,6 +137,8 @@ function System:update (dt)
         floor(n.pos)
     else
         self.pos = n.pos
+        -- extend the position just to have squared edges
+        n.pos = Vector.lerp(n.start, n.dest, 1.1)
         self.canvas:renderTo(function()
             self:draw_active()
         end)
@@ -249,5 +252,52 @@ function System:draw ()
         self:draw_active()
     end
 end
+
+-- Collect a list of positions that this system will visit over the course
+-- of its animation. If n == 1 then every position is returned, n == 2 then
+-- every other, n == 3 then every third, etc.
+function System:discrete (n)
+    local bacStack = self.stack
+    local bacPos = self.pos
+    local bacAngle = self.angle
+
+
+    self.stack = Stack.new()
+    self.pos = self.startpos:copy()
+    self.angle = self.startangle
+    local states = str2queue(self.seed)
+    local list = {}
+
+    while states:length() > 0 do
+        local c = states:pop()
+        local d = self.dispatch[c]
+
+        if d then
+            if type(d) == "function" then
+                if d(self) then
+                    self.pos = destination(self.pos, math.rad(self.angle), self.length)
+                    self.active = nil
+                    table.insert(list, self.pos:copy())
+                end
+            elseif type(d) == "table" then
+                d[1](self, d[2])
+            end
+        end
+    end
+
+    self.stack = bacStack
+    self.pos = bacPos
+    self.angle = bacAngle
+
+    local q = Queue.new()
+    for i = 1, #list do
+        if i % n == 0 then
+            q:push(list[i])
+        end
+    end
+
+    return q
+end
+
 
 return System

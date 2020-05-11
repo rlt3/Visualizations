@@ -14,6 +14,11 @@ function Queue:push (v)
     self.tail = self.tail + 1
 end
 
+function Queue:pushfront (v)
+    self.head = self.head - 1
+    self[self.head] = v
+end
+
 function Queue:pop ()
     if self:length() == 0 then return nil end
     local v = self[self.head]
