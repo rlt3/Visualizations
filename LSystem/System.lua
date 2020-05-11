@@ -38,13 +38,12 @@ function hsv2rgb (h, s, v)
 end
 
 function System.new (init, transition, dispatch)
-    local width = love.graphics.getWidth() * 5
-    local height = love.graphics.getHeight() * 5
-    local start = Vector.new(width / 2, height / 2)
+    local scale = 6
+    local width = love.graphics.getWidth() * scale
+    local height = love.graphics.getHeight() * scale
+    local start = Vector.new(width * 0.25, height * 0.6)
     init.position = start
     local t = setmetatable({
-        width = width,
-        height = height,
         canvas = love.graphics.newCanvas(width, height),
 
         transition = transition,
@@ -70,6 +69,7 @@ function System.new (init, transition, dispatch)
     love.graphics.setLineWidth(t.width)
     love.graphics.setLineStyle("smooth")
     t.canvas:renderTo(function()
+        love.graphics.clear(1, 1, 1, 1)
         love.graphics.setLineWidth(t.width)
         love.graphics.setLineStyle("smooth")
     end)
@@ -242,6 +242,7 @@ function System:stepn (n)
 end
 
 function System:draw ()
+    love.graphics.setColor(1, 1, 1, 1)
     love.graphics.draw(self.canvas)
     --love.graphics.draw(self.canvas, -self.width / 2, -self.height / 2)
     if self.active then

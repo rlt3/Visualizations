@@ -10,6 +10,10 @@ end
 function love.keypressed (key, unicode)
     if key == "escape" or key == "q" then
         love.event.quit()
+    elseif key == "e" then
+        Cam.scale = Cam.scale * 1.1
+    elseif key == "d" then
+        Cam.scale = Cam.scale * 0.9
     end
 end
 
@@ -22,37 +26,37 @@ function love.load ()
 
     math.randomseed(os.time())
 
-    local initial = {
-        state = "X",
-        position = Vector.new(150, Height),
-        angle = -60,
-        speed = 2000,
-        length = 2.5,
-        width = 2.5,
-    }
+    --local initial = {
+    --    state = "X",
+    --    position = Vector.new(150, Height),
+    --    angle = -60,
+    --    speed = 2000,
+    --    length = 2.5,
+    --    width = 2.5,
+    --}
 
-    local transition = {
-        ["X"] = "F+[[X]-X]-F[-FX]+X",
-        ["F"] = "FF",
-    }
+    --local transition = {
+    --    ["X"] = "F+[[X]-X]-F[-FX]+X",
+    --    ["F"] = "FF",
+    --}
 
-    local dispatch = {
-        ["X"] = nil,
-        ["F"] = System.state.draw,
-        ["["] = System.state.push,
-        ["]"] = System.state.pop,
-        ["-"] = { System.state.angle, 25  },
-        ["+"] = { System.state.angle, -25 },
-    }
+    --local dispatch = {
+    --    ["X"] = nil,
+    --    ["F"] = System.state.draw,
+    --    ["["] = System.state.push,
+    --    ["]"] = System.state.pop,
+    --    ["-"] = { System.state.angle, 25  },
+    --    ["+"] = { System.state.angle, -25 },
+    --}
 
-    Fern = System.new(initial, transition, dispatch)
-    Fern:stepn(6)
+    --Fern = System.new(initial, transition, dispatch)
+    --Fern:stepn(6)
 
     local init2 = {
         state = "FX",
-        position = Vector.new(Width / 2, Height / 2),
+        position = Vector.new(0, 0),
         angle = 90,
-        speed = 25,
+        speed = 200,
         length = 50,
         width = 10,
     }
@@ -98,8 +102,8 @@ function love.update (dt)
         local x, y = Curve.active.pos.x, Curve.active.pos.y
         Cam:moveTo(x, y)
     end
-    --Cam.scale = Cam.scale - (0.10 * dt)
 
+    --Cam.scale = Cam.scale - (0.10 * dt)
     --Curve.speed = Curve.speed + (1 * dt)
     --Cam.target.screenY = Cam.target.screenY - (5 * dt)
     --Cam.target.screenX = Cam.target.screenX - (10 * dt)
