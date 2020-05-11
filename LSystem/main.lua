@@ -1,3 +1,4 @@
+local Camera = require("Camera")
 local System = require("System")
 local Vector = require("Vector")
 
@@ -25,6 +26,9 @@ function love.load ()
         state = "X",
         position = Vector.new(150, Height),
         angle = -60,
+        speed = 2000,
+        length = 2.5,
+        width = 2.5,
     }
 
     local transition = {
@@ -41,20 +45,64 @@ function love.load ()
         ["+"] = { System.state.angle, -25 },
     }
 
-    L = System.new(initial, transition, dispatch)
-    L:stepn(6)
+    Fern = System.new(initial, transition, dispatch)
+    Fern:stepn(6)
+
+    local init2 = {
+        state = "FX",
+        position = Vector.new(Width / 2, Height / 2),
+        angle = 90,
+        speed = 25,
+        length = 50,
+        width = 10,
+    }
+
+    local trans2 = {
+        ["X"] = "X+YF+",
+        ["Y"] = "-FX-Y",
+    }
+
+    local dispatch2 = {
+        ["F"] = System.state.draw,
+        ["-"] = { System.state.angle, 90 },
+        ["+"] = { System.state.angle, -90 },
+    }
+
+    Curve = System.new(init2, trans2, dispatch2)
+    Curve:stepn(12)
+
+    Cam = Camera:new(Width / 2, Height / 2)
+    Cam.scale = 0.25
 
     Time = 0
     Next = 0
 end
 
 function love.draw ()
-    L:draw()
+    Cam:set()
+    --Fern:draw()
+    Curve:draw()
+    Cam:unset()
 end
+
+once = false
 
 function love.update (dt)
 	Time = Time + dt
-    L:update(dt)
+
+    --Fern:update(dt)
+    Curve:update(dt)
+
+    if not once and Curve.active then
+        once = true
+        local x, y = Curve.active.pos.x, Curve.active.pos.y
+        Cam:moveTo(x, y)
+    end
+    --Cam.scale = Cam.scale - (0.10 * dt)
+
+    --Curve.speed = Curve.speed + (1 * dt)
+    --Cam.target.screenY = Cam.target.screenY - (5 * dt)
+    --Cam.target.screenX = Cam.target.screenX - (10 * dt)
 
     --if L:done() and Time > Next then
     --    Next = Time + 0.5

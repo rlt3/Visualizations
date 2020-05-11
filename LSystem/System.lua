@@ -5,6 +5,12 @@ local Stack = require("Stack")
 local System = {}
 System.__index = System
 
+function math.clamp (min, max, v)
+    if v < min then return min end
+    if v > max then return max end
+    return v
+end
+
 function str2queue (str)
     local Q = Queue.new()
     for c in str:gmatch"." do
@@ -13,34 +19,86 @@ function str2queue (str)
     return Q
 end
 
-function System.new (initial, transition, dispatch)
+function hsv2rgb (h, s, v)
+	local r, g, b
+	local i = math.floor(h * 6);
+	local f = h * 6 - i;
+	local p = v * (1 - s);
+	local q = v * (1 - f * s);
+	local t = v * (1 - (1 - f) * s);
+	i = i % 6
+	if i == 0 then r, g, b = v, t, p
+	elseif i == 1 then r, g, b = q, v, p
+	elseif i == 2 then r, g, b = p, v, t
+	elseif i == 3 then r, g, b = p, q, v
+	elseif i == 4 then r, g, b = t, p, v
+	elseif i == 5 then r, g, b = v, p, q
+	end
+	return r, g, b
+end
+
+function System.new (init, transition, dispatch)
+    local width = love.graphics.getWidth() * 5
+    local height = love.graphics.getHeight() * 5
+    local start = Vector.new(width / 2, height / 2)
+    init.position = start
     local t = setmetatable({
-        canvas = love.graphics.newCanvas(Width, Height),
+        width = width,
+        height = height,
+        canvas = love.graphics.newCanvas(width, height),
 
         transition = transition,
         dispatch = dispatch,
 
-        startpos = initial.position,
-        startangle = initial.angle,
-        pos = initial.position:copy(),
-        angle = initial.angle,
-        seed = initial.state,
+        startpos = init.position,
+        startangle = init.angle,
+        pos = init.position:copy(),
+        angle = init.angle,
+        seed = init.state,
+        hsv = { 0, 0.5, 1 },
+
+        speed = init.speed,
+        length = init.length,
+        width = init.width,
 
         stack = Stack.new(),
-        states = str2queue(initial.state),
+        states = str2queue(init.state),
         active = nil,
+
     }, System)
+
+    love.graphics.setLineWidth(t.width)
+    love.graphics.setLineStyle("smooth")
+    t.canvas:renderTo(function()
+        love.graphics.setLineWidth(t.width)
+        love.graphics.setLineStyle("smooth")
+    end)
+
     return t
+end
+
+function destination (pos, angle, distance)
+    return Vector.new(pos.x + (math.cos(angle) * distance),
+                      pos.y + (math.sin(angle) * distance))
+end
+
+function floor (vec)
+    vec.x = math.floor(vec.x)
+    vec.y = math.floor(vec.y)
 end
 
 -- Activates a new 'line' to be drawn over time with the current position and
 -- angle as values for it.
 function System:activate ()
     self.active = {
-        a = self.pos:copy(),
-        b = self.pos:copy(),
-        angle = self.angle
+        start = self.pos:copy(),
+        pos   = self.pos:copy(),
+        dest  = destination(self.pos, math.rad(self.angle), self.length),
+        time  = 0,
     }
+    floor(self.active.start)
+    floor(self.active.pos)
+    floor(self.active.dest)
 end
 
 -- Returns whether the system is done with this current state queue.
@@ -48,12 +106,17 @@ function System:done ()
     return (self.active == nil and self.states:length() == 0)
 end
 
+function System:draw_active ()
+    --local r, g, b, a = love.graphics.getColor()
+    local n = self.active
+    love.graphics.setColor(hsv2rgb(unpack(self.hsv)))
+    love.graphics.line(n.start.x, n.start.y, n.pos.x, n.pos.y)
+    --love.graphics.setColor(r, g, b, a)
+end
+
 -- Update the currently activated 'line'. If there's no active line then
 -- process the state queue until one is found. If one isn't found, then return.
 function System:update (dt)
-    local length = 2.5
-    local speed = 500
-
     if self:done() then
         return
     end
@@ -62,32 +125,19 @@ function System:update (dt)
         return
     end
 
-    local a = self.active.a
-    local b = self.active.b
-    local dist = Vector.distance(a, b)
-    local state = self.active.state
+    local n = self.active
 
-    if dist < length then
-        local rad = math.rad(self.active.angle)
-        local xdir = math.cos(rad)
-        local ydir = math.sin(rad)
-        local b2 = Vector.new(b.x + (xdir * speed * dt),
-                              b.y + (ydir * speed * dt))
-        if Vector.distance(a, b2) > length then
-            b.x = b.x + (xdir * length)
-            b.y = b.y + (ydir * length)
-            dist = length + 1
-        else
-            b.x = b2.x
-            b.y = b2.y
+    if n.time < 1 then
+        n.time = n.time + (self.speed * dt)
+        if n.time > 1 then
+            n.time = 1
         end
-    end
-
-    if dist > length then
-        self.pos = b
-        self.angle = self.active.angle
+        n.pos = Vector.lerp(n.start, n.dest, n.time)
+        floor(n.pos)
+    else
+        self.pos = n.pos
         self.canvas:renderTo(function()
-            love.graphics.line(a.x, a.y, b.x, b.y)
+            self:draw_active()
         end)
         self.active = nil
     end
@@ -95,7 +145,26 @@ end
 
 System.state = {}
 
+function rot_val (val)
+    if val < 0 then
+        val = 1 - val
+    elseif val > 1 then
+        val = val - 1
+    end
+end
+
+function add_hue (hsv, dir)
+    hsv[1] = hsv[1] + (dir * (1 / (360 * 2)))
+    rot_val(hsv[1])
+end
+
+function add_sat (hsv, dir)
+    hsv[2] = hsv[2] + (dir * 0.0001)
+    rot_val(hsv[2])
+end
+
 function System.state.draw (sys)
+    add_hue(sys.hsv, 1)
     sys:activate()
     return true
 end
@@ -103,15 +172,22 @@ end
 function System.state.push (sys)
     sys.stack:push(sys.angle)
     sys.stack:push(sys.pos)
+    sys.stack:push(sys.hsv)
 end
 
 function System.state.pop (sys)
+    sys.hsv = sys.stack:pop()
     sys.pos = sys.stack:pop()
     sys.angle = sys.stack:pop()
 end
 
 function System.state.angle (sys, val)
     sys.angle = sys.angle + val
+    if val < 0 then
+        add_sat(sys.hsv, -1)
+    else
+        add_sat(sys.hsv, 1)
+    end
 end
 
 -- Process each state in the state queue via the dispatch table. The dispatch
@@ -167,9 +243,9 @@ end
 
 function System:draw ()
     love.graphics.draw(self.canvas)
-    local t = self.active
-    if t then
-        love.graphics.line(t.a.x, t.a.y, t.b.x, t.b.y)
+    --love.graphics.draw(self.canvas, -self.width / 2, -self.height / 2)
+    if self.active then
+        self:draw_active()
     end
 end
 
