@@ -43,13 +43,13 @@ function love.load ()
         );
     }
 
-	float circle (vec2 pos, float radius)
+	float circle (vec2 pos, float radius, float r)
 	{
         // sets the width between the the two steps, the lower the more `hard'
         // the edge of the circle will appear
-        const float smoothness = 0.05;
+        const float smoothness = 1.0;
         // how far the circle will expand
-        const float range = 1.0;
+        float range = r;
         // dot product with same vector is square of that vector's magnitude
         float square = dot(pos, pos);
 		return 1.0 - smoothstep(radius - (radius * smoothness),
@@ -59,39 +59,29 @@ function love.load ()
 
     vec4 effect (vec4 color, Image tex, vec2 tc, vec2 px)
     {
-		float t = sin(0.25 * time);
-
         // get position based on center of screen in range [0,1]
         vec2 pos = (px.xy / love_ScreenSize.xy) - vec2(0.5);
         // correct for aspect ratio
         pos *= vec2(love_ScreenSize.x / love_ScreenSize.y, 1);
 
-        // change radius from [0.0, 1.0] over time
-		float radius = (t + 1.0) / 2.0;
-		float len = circle(pos, radius);
+        float gate = smoothstep(0, 5, time);
 
-        // zoom from [1.0, 0.75] into texture
-        float zoomf = 1.0 - ((t + 1.0) / 8.0);
+        // start from a time in the future and step 'backwards' to 0
+        float maxt = 25.0;
+        float t = maxt - (maxt * smoothstep(0, maxt, 2.5 * time));
+        t *= gate;
 
-        // generate two texture coordinates
+        // the number of waves is determined by cosine over time
+        float waves = cos(length(pos * t * 4)) + 1.0;
+        float len = circle(pos, waves, 1);
+
         vec2 t1 = tc;
-        vec2 t2 = zoom(tc, zoomf);
+        vec2 t2 = zoom(tc, 0.95);
 
-        // then base two colors from texture
-        vec3 a1 = Texel(forest2, t1).rgb;
-        vec3 a2 = Texel(forest2, t2).rgb;
+        vec4 a1 = Texel(forest2, t1);
+        vec4 a2 = Texel(forest2, t2);
 
-        // finally, manually do a ripple effect by distorting the colors over
-        // a smaller and smaller radius, leaving the center circle un-affected
-        vec3 c1 = mix(a1, a2, len);
-        len = circle(pos, radius / 1.1);
-        vec3 c2 = mix(c1, a1, len);
-        len = circle(pos, radius / 1.2);
-        vec3 c3 = mix(c2, c1, len);
-        len = circle(pos, radius / 1.3);
-        vec3 clr = mix(c3, c2, len);
-
-        return vec4(clr, 1);
+        return mix(a1, a2, len);
     }
     ]]
     love.graphics.setShader(Shader)
