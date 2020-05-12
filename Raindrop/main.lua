@@ -45,16 +45,11 @@ function love.load ()
 
 	float circle (vec2 pos, float radius, float r)
 	{
-        // sets the width between the the two steps, the lower the more `hard'
-        // the edge of the circle will appear
-        const float smoothness = 1.0;
         // how far the circle will expand
         float range = r;
         // dot product with same vector is square of that vector's magnitude
         float square = dot(pos, pos);
-		return 1.0 - smoothstep(radius - (radius * smoothness),
-							    radius + (radius * smoothness),
-							    square * range);
+		return smoothstep(0, 2 * radius, square * range);
 	}
 
     vec4 effect (vec4 color, Image tex, vec2 tc, vec2 px)
@@ -64,24 +59,18 @@ function love.load ()
         // correct for aspect ratio
         pos *= vec2(love_ScreenSize.x / love_ScreenSize.y, 1);
 
-        float gate = smoothstep(0, 5, time);
+        // wave length is determined over time and restarts over an interval
+        float wave = mod(time, 1.0);
 
-        // start from a time in the future and step 'backwards' to 0
-        float maxt = 25.0;
-        float t = maxt - (maxt * smoothstep(0, maxt, 2.5 * time));
-        t *= gate;
+        // generate two circles and step between their edges to preserve the
+        // inner middle texture over time, altering only the wave
+        float inner = circle(pos, wave, 1);
+        float outer = circle(pos, wave, 0.85);
+        float circle = smoothstep(inner, outer, wave);
 
-        // the number of waves is determined by cosine over time
-        float waves = cos(length(pos * t * 4)) + 1.0;
-        float len = circle(pos, waves, 1);
-
-        vec2 t1 = tc;
-        vec2 t2 = zoom(tc, 0.95);
-
-        vec4 a1 = Texel(forest2, t1);
-        vec4 a2 = Texel(forest2, t2);
-
-        return mix(a1, a2, len);
+        vec4 a1 = Texel(forest2, tc);
+        vec4 a2 = Texel(forest2, zoom(tc, 0.99));
+        return mix(a1, a2, circle);
     }
     ]]
     love.graphics.setShader(Shader)
