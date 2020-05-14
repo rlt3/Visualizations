@@ -228,23 +228,20 @@ function getTemp (y)
     return (math.sin(6 * y - 1.5) / 2) + 0.5
 end
 
-function uvCoords (x, y)
-    local ux, uy = ((x / (Width-1)) - 0.5) * 2, ((y / (Height-1)) - 0.5) * 2
-    local uz = 1 - ux * ux + uy * uy
-    if uz < 0 then
-        uz = -math.sqrt(-uz)
-    else
-        uz = math.sqrt(uz)
-    end
-    return ux, uy, uz
+function sphereCoords (x, y)
+    local ux, uy = x / (Width-1), y / (Height-1)
+	local nx = math.cos(ux * 2 * math.pi) * math.cos(uy * math.pi - math.pi / 2)
+	local ny = math.sin(uy * math.pi - math.pi/2)
+	local nz = math.sin(ux * 2 * math.pi) * math.cos(uy * math.pi - math.pi / 2)
+    return nx, ny, nz
 end
 
 function noise (x, y)
-    local ux, uy, uz = uvCoords(x, y)
+    local ux, uy, uz = sphereCoords(x, y)
 
     local elevation =
               perlin:noise(ux * 4,  uy * 4,  uz * 4 ) * 1.00
-            + perlin:noise(ux * 8, uy * 8, uz * 8) * 0.75
+            + perlin:noise(ux * 8,  uy * 8,  uz * 8) * 0.75
             + perlin:noise(ux * 16, uy * 16, uz * 16) * 0.50
 
     elevation = math.clamp(-1, 1, elevation)
@@ -253,8 +250,8 @@ function noise (x, y)
     -- generate temperature which is based on latitude
     temperature = getTemp(y / (Height - 1))
 
-    SetPixel(x, y, elevation, temperature, 0, 1)
-    --SetPixel(x, y, elevation, elevation, elevation, 1)
+    --SetPixel(x, y, elevation, temperature, 0, 1)
+    SetPixel(x, y, elevation, elevation, elevation, 1)
 end
 
 function biome (x, y)
@@ -302,7 +299,7 @@ function generate_another ()
         Routines:pop()
     end
     Routines:push(routine(iter_random, noise))
-    Routines:push(routine(iter_depth, biome))
+    --Routines:push(routine(iter_depth, biome))
 end
 
 function love.keypressed (key, unicode)
@@ -310,6 +307,12 @@ function love.keypressed (key, unicode)
         love.event.quit()
     elseif key == "r" then
         generate_another()
+    elseif key == "s" then
+        if CurrShader then
+            CurrShader = nil
+        else
+            CurrShader = Sphere
+        end
     end
 end
 
@@ -349,8 +352,9 @@ function love.load ()
             return vec4(0);
     }
     ]]
-    love.graphics.setShader(Sphere)
     Sphere:send("lightDir", {0, 0, 1});
+
+    CurrShader = nil
 
 	Time = 0
 
@@ -394,6 +398,7 @@ function love.load ()
 end
 
 function love.draw ()
+    love.graphics.setShader(CurrShader)
     love.graphics.draw(Terrain, X, Y)
 end
 
