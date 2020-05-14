@@ -105,12 +105,12 @@ end
 
 -- Updates pixels vertically going up
 function iter_scan_up (update)
-    iter_scan(update, Height - 1, 0, -1)
+    iter_scan(update, Height - 1, 0, -1, dt)
 end
 
 -- Updates pixels vertically going down
 function iter_scan_down (update)
-    iter_scan(update, 0, Height - 1, 1)
+    iter_scan(update, 0, Height - 1, 1, dt)
 end
 
 -- Updates pixels in an exapnding circular order from the center
@@ -174,41 +174,52 @@ function iter_rect (update)
     end
 end
 
--- Shuffles all pixels random then updates them in shuffled order
-function iter_random (update)
-    local pixels = {}
-    for y = 0, Height - 1 do
-        for x = 0, Width - 1 do
-            table.insert(pixels, {x, y})
+function should_yield (count, dt)
+    count = count + 1
+    local todo = NumNodes * (1/5) * dt
+    if count >= todo then
+        count = 0
+        dt = coroutine.yield()
+    end
+    return count, dt
+end
+
+function pixels2table ()
+    local t = {}
+    for x = 0, Width - 1 do
+        for y = 0, Height - 1 do
+            local r, g, b = GetPixel(x, y)
+            table.insert(t, { x = x, y = y, r = r, g = g, b = b })
         end
     end
+    return t
+end
+
+-- Shuffles all pixels random then updates them in shuffled order
+function iter_random (update)
+    local pixels = pixels2table()
     shuffle(pixels)
+
+    local count = 0
+    local dt = 0
     for i = 1, #pixels do
-        update(pixels[i][1], pixels[i][2])
-        if i % (Width * 2) == 0 then
-            coroutine.yield()
-        end
+        update(pixels[i].x, pixels[i].y)
+        count, dt = should_yield(count, dt)
     end
 end
 
 -- Sorts pixels lowest-depth first and updates them in sorted order
 function iter_depth (update)
-    local pixels = {}
-    for y = 0, Height - 1 do
-        for x = 0, Width - 1 do
-            table.insert(pixels, {x, y, v = GetPixel(x, y)})
-        end
-    end
-
+    local pixels = pixels2table()
     table.sort(pixels, function (a, b)
-        return a.v < b.v
+        return a.r < b.r
     end)
 
+    local count = 0
+    local dt = 0
     for i = 1, #pixels do
-        update(pixels[i][1], pixels[i][2])
-        if i % (Width * 2) == 0 then
-            coroutine.yield()
-        end
+        update(pixels[i].x, pixels[i].y)
+        count, dt = should_yield(count, dt)
     end
 end
 
@@ -217,38 +228,33 @@ function getTemp (y)
     return (math.sin(6 * y - 1.5) / 2) + 0.5
 end
 
+function uvCoords (x, y)
+    local ux, uy = ((x / (Width-1)) - 0.5) * 2, ((y / (Height-1)) - 0.5) * 2
+    local uz = 1 - ux * ux + uy * uy
+    if uz < 0 then
+        uz = -math.sqrt(-uz)
+    else
+        uz = math.sqrt(uz)
+    end
+    return ux, uy, uz
+end
+
 function noise (x, y)
-    -- put coordinates into [-0.5, 0.5] range
-    local xs = (x / (Width-1)) - 0.5
-    local ys = (y / (Height-1)) - 0.5
+    local ux, uy, uz = uvCoords(x, y)
 
     local elevation =
-              perlin:noise(xs * 4,  ys * 4)  * 1.00
-            + perlin:noise(xs * 16, ys * 16) * 0.75
-            + perlin:noise(xs * 32, ys * 32) * 0.50
+              perlin:noise(ux * 4,  uy * 4,  uz * 4 ) * 1.00
+            + perlin:noise(ux * 8, uy * 8, uz * 8) * 0.75
+            + perlin:noise(ux * 16, uy * 16, uz * 16) * 0.50
 
-    --local temperature =
-    --          perlin:noise(xs * 2,  ys * 2)  * 1.00
-    --        + perlin:noise(xs * 4, ys * 4) * 0.75
-    --        + perlin:noise(xs * 8, ys * 8) * 0.50
-
-    --local elevation =
-    --          perlin:noise(xs * 4,  ys * 4)  * 1.00
-    --        + perlin:noise(xs * 20, ys * 20) * 0.50
-    --        + perlin:noise(xs * 50, ys * 50) * 0.25
-    -- clamp and bring out middle values more, keeping highs mostly the same
-    --elevation = math.clamp(0, 1, elevation)
-    --elevation = math.pow(elevation, 0.40)
+    elevation = math.clamp(-1, 1, elevation)
+    elevation = (elevation * 0.5) + 0.5
 
     -- generate temperature which is based on latitude
-    temperature = getTemp(ys + 0.5)
-    --temperature = (temperature * 0.5) + 0.5
-    --temperature = math.clamp(0, 1, temperature)
-
-    elevation = (elevation * 0.5) + 0.5
-    elevation = math.clamp(0, 1, elevation)
+    temperature = getTemp(y / (Height - 1))
 
     SetPixel(x, y, elevation, temperature, 0, 1)
+    --SetPixel(x, y, elevation, elevation, elevation, 1)
 end
 
 function biome (x, y)
@@ -268,17 +274,25 @@ end
 
 function GetPixel (x, y)
     CheckRange(x, y)
+    -- Lookup in table rather than query image data for values
     local t = Nodes[x][y]
     return t.r, t.g, t.b, t.a
 end
 
 function SetPixel (x, y, r, g, b, a)
     CheckRange(x, y)
+    a = a or 1
+    -- Keep a copy for the entire pixel block for quick lookups
     local t = Nodes[x][y]
     t.r = r
     t.g = g
     t.b = b
-    t.a = a or 1
+    t.a = a
+    for i = x * Scale, x * Scale + Scale - 1 do
+        for j = y * Scale, y * Scale + Scale - 1 do
+            Pixels:setPixel(i, j, r, g, b, a)
+        end
+    end
 end
 
 function generate_another ()
@@ -302,16 +316,56 @@ end
 function love.load ()
     math.randomseed(os.time())
 
+    Sphere = love.graphics.newShader[[
+    #define PI 3.141592653589793238462643383
+
+    extern number time;
+    extern vec3 lightDir;
+
+    vec4 effect (vec4 color, Image tex, vec2 tc, vec2 px)
+    {
+        // map texture coordinates onto UV. from (0,0)->(1,1) to -1, 1
+        vec2 uv = (tc.xy - 0.5) * 2.0;
+        float radius = length(uv);
+
+        // a `3D' vector that goes from center of sphere to each pixel.
+        // we just 'solve for z' in formula of circle: x^2 + y^2 + z^2 = 1
+        vec3 normal = vec3(uv.x, uv.y, sqrt(1 - uv.x * uv.x - uv.y * uv.y));
+        
+        // light direction and its dot product with the normal to produce
+        // a lighting coefficient for 'shading'
+        vec3 l = normalize(lightDir);
+        float ndotl = max(0, dot(normal, l));
+
+        // map UV normal onto sphere 
+        vec2 texCoords = vec2(0.5 + (atan(normal.z, normal.x) / (2 * PI)),
+                              0.5 - (asin(normal.y) / PI));
+        texCoords.x = mod(texCoords.x + time * 0.10, 1);
+        vec3 texColor = Texel(tex, texCoords).xyz;  
+
+        if (radius <= 1.0)
+            return vec4(vec3(ndotl) * texColor, 1);
+        else
+            return vec4(0);
+    }
+    ]]
+    love.graphics.setShader(Sphere)
+    Sphere:send("lightDir", {0, 0, 1});
+
 	Time = 0
 
     Scale = 5
-    Width = love.graphics.getWidth() / Scale
-    Height = love.graphics.getHeight() / Scale
+    Width = love.graphics.getHeight() / Scale
+    Height = Width
+    --Width = love.graphics.getWidth() / Scale
+    --Height = love.graphics.getHeight() / Scale
+    NumNodes = Width * Height
     Nodes = {}
+
     for x = 0, Width - 1 do
         Nodes[x] = {}
         for y = 0, Height - 1 do
-            Nodes[x][y] = { r = 0, g = 0, b = 0, a = 1 }
+            Nodes[x][y] = { r = 0, g = 0, b = 0, a = 0 }
         end
     end
 
@@ -331,21 +385,22 @@ function love.load ()
 
     Routines = Queue.new()
     generate_another()
+
+    --Pixels = love.image.newImageData(love.graphics.getWidth(), love.graphics.getHeight())
+    Pixels = love.image.newImageData(love.graphics.getHeight(), love.graphics.getHeight())
+    Terrain = love.graphics.newImage(Pixels)
+    X = (love.graphics.getWidth() / 2) - (Terrain:getWidth()   / 2)
+    Y = (love.graphics.getHeight() / 2) - (Terrain:getHeight() / 2)
 end
 
 function love.draw ()
-    local t = nil
-    for x = 0, Width - 1 do
-        for y = 0, Height - 1 do
-            t = Nodes[x][y]
-            love.graphics.setColor(t.r, t.g, t.b, t.a)
-            love.graphics.rectangle("fill", x * Scale, y * Scale, Scale, Scale)
-        end
-    end
+    love.graphics.draw(Terrain, X, Y)
 end
 
 function love.update (dt)
 	Time = Time + dt
+
+    Sphere:send("time", Time);
 
     if Routines:length() > 0 then
         if not rtn or coroutine.status(rtn) == "dead" then
@@ -357,10 +412,11 @@ function love.update (dt)
         if coroutine.status(rtn) == "dead" then
             rtn = nil
         else
-            local good, err = coroutine.resume(rtn)
+            local good, err = coroutine.resume(rtn, dt)
             if not good then
                 error("Coroutine: " .. err)
             end
+            Terrain = love.graphics.newImage(Pixels)
         end
     end
 end
