@@ -225,7 +225,7 @@ end
 
 -- return temperature over y-axis from [0,1] range
 function getTemp (y)
-    return (math.sin(6 * y - 1.5) / 2) + 0.5
+    return (math.sin(7 * y - 1.95) / 2) + 0.5
 end
 
 function sphereCoords (x, y)
@@ -240,18 +240,25 @@ function noise (x, y)
     local ux, uy, uz = sphereCoords(x, y)
 
     local elevation =
-              perlin:noise(ux * 4,  uy * 4,  uz * 4 ) * 1.00
-            + perlin:noise(ux * 8,  uy * 8,  uz * 8) * 0.75
-            + perlin:noise(ux * 16, uy * 16, uz * 16) * 0.50
+              perlin:noise(ux * 4,  uy * 4,  uz * 4)  * 1.00
+            + perlin:noise(ux * 16, uy * 16, uz * 16) * 0.75
+            + perlin:noise(ux * 32, uy * 32, uz * 32) * 0.25
 
     elevation = math.clamp(-1, 1, elevation)
     elevation = (elevation * 0.5) + 0.5
 
-    -- generate temperature which is based on latitude
-    temperature = getTemp(y / (Height - 1))
+    local temperature = getTemp(y / (Height - 1))
+    temperature = temperature + (perlin:noise(ux * 2, uy * 2, uz * 2) * 0.05)
+    temperature = math.clamp(0, 1, temperature)
 
-    --SetPixel(x, y, elevation, temperature, 0, 1)
-    SetPixel(x, y, elevation, elevation, elevation, 1)
+    --local temperature =
+    --          perlin:noise(ux * 2, uy * 2, uz * 2) * 1.00
+    --        + perlin:noise(ux * 4, uy * 4, uz * 4) * 0.75
+    --        + perlin:noise(ux * 8, uy * 8, uz * 8) * 0.50
+    --temperature = math.clamp(-1, 1, temperature)
+    --temperature = (temperature * 0.5) + 0.5
+
+    SetPixel(x, y, elevation, temperature, elevation, 1)
 end
 
 function biome (x, y)
@@ -299,7 +306,7 @@ function generate_another ()
         Routines:pop()
     end
     Routines:push(routine(iter_random, noise))
-    --Routines:push(routine(iter_depth, biome))
+    Routines:push(routine(iter_depth, biome))
 end
 
 function love.keypressed (key, unicode)
@@ -382,8 +389,8 @@ function love.load ()
         --iter_depth,
     }
 
-    --BiomeLookup = love.image.newImageData("biome.png")
-    BiomeLookup = love.image.newImageData("biome-block.png")
+    BiomeLookup = love.image.newImageData("biome.png")
+    --BiomeLookup = love.image.newImageData("biome-block.png")
     BiomeWidth = 255
     BiomeHeight = 255
 
