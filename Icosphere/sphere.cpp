@@ -31,7 +31,7 @@ static const GLchar* vertex_source =
     "   FragPos = vec3(model * vec4(vertex, 1.0));\n"
     //"   Normal = norm;\n"
     "   vec3 v = vertex;\n"
-    "   v.z *= sin(0.25 * time);\n"
+    //"   v.z *= sin(time);\n"
     "   gl_Position = projection * view * model * vec4(v.xyz, 1.0);\n"
     "}";
 
@@ -616,7 +616,7 @@ addVertices (float *v, vector<float> &out)
 }
 
 void
-subdivide (float *vA, float *vB, float *vC, int depth, vector<float> &out)
+subdivide (float *vA, float *vB, float *vC, int depth, vector<float> &out, float percent)
 {
     float vAB[3], vBC[3], vCA[3];
 
@@ -628,19 +628,19 @@ subdivide (float *vA, float *vB, float *vC, int depth, vector<float> &out)
     }
 
     for (int i = 0; i < 3; i++) {
-        vAB[i] = vA[i] + vB[i];
-        vBC[i] = vB[i] + vC[i];
-        vCA[i] = vC[i] + vA[i];
+        vAB[i] = vA[i] + (vB[i] * percent);
+        vBC[i] = vB[i] + (vC[i] * percent);
+        vCA[i] = vC[i] + (vA[i] * percent);
     }
 
     normalize3f(vAB);
     normalize3f(vBC);
     normalize3f(vCA);
 
-    subdivide(vA,  vAB, vCA, depth - 1, out);
-    subdivide(vB,  vBC, vAB, depth - 1, out);
-    subdivide(vC,  vCA, vBC, depth - 1, out);
-    subdivide(vAB, vBC, vCA, depth - 1, out);
+    subdivide(vA,  vAB, vCA, depth - 1, out, percent);
+    subdivide(vB,  vBC, vAB, depth - 1, out, percent);
+    subdivide(vC,  vCA, vBC, depth - 1, out, percent);
+    subdivide(vAB, vBC, vCA, depth - 1, out, percent);
 }
 
 void
@@ -652,9 +652,12 @@ copyPoint (float *v, int index, vector<float> &vertices)
 }
 
 vector<float>
-subdivideIco (vector<float> &ico, int depth)
+subdivideIco (vector<float> &ico, int depth, float percent)
 {
     float vA[3], vB[3], vC[3];
+
+    if (percent == 0.0)
+        percent = 0.01;
 
     vector<float> output;
 
@@ -663,7 +666,7 @@ subdivideIco (vector<float> &ico, int depth)
         copyPoint(vA, i, ico);
         copyPoint(vB, i + 3, ico);
         copyPoint(vC, i + 6, ico);
-        subdivide(vA, vB, vC, depth, output);
+        subdivide(vA, vB, vC, depth, output, percent);
     }
 
     return output;
@@ -726,7 +729,7 @@ main (int argc, char **argv)
     shader.use();
 
     auto ico = buildIco();
-    auto vertices = subdivideIco(ico, 3);
+    auto vertices = subdivideIco(ico, 3, 1.0);
 
     glBindBuffer(GL_ARRAY_BUFFER, VBO);
     /* reserve size of vertices buffer */
@@ -766,6 +769,7 @@ main (int argc, char **argv)
     shader.set_uniform_mat4fv("view", camera.view());
 
     float time = 0;
+    float percent = 0;
 
     while (playing) {
         while (SDL_PollEvent(&e)) {
@@ -778,6 +782,10 @@ main (int argc, char **argv)
 
         time = (float)(SDL_GetTicks() * 0.001);
         shader.set_uniform_1f("time", time);
+
+        percent = (sin(time) + 1.0) / 2.0;
+        vertices = subdivideIco(ico, 3, percent);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), &vertices[0]);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
