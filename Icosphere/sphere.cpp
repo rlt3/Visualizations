@@ -57,7 +57,7 @@ static const GLchar* fragment_source =
     "{\n"
     //"   FragColor = vec4(1.0);\n"
     "   /* ambient */\n"
-    "   float ambientStrength = 0.1;\n"
+    "   float ambientStrength = 0.75;\n"
     "   vec3 ambient = ambientStrength * lightColor;\n"
     "\n"
     "   /* diffuse */\n"
@@ -561,11 +561,13 @@ buildIco()
     return v;
 }
 
-    void
-normalize3f(float* v)
+void
+normalize3f (float* v)
 {
     float d = sqrtf(v[0] * v[0] + v[1] * v[1] + v[2] * v[2]);
-    assert(d != 0.f);
+    if (d == 0.0f)
+        d = 0.001;
+    //assert(d != 0.f);
     v[0] /= d;
     v[1] /= d;
     v[2] /= d;
@@ -743,7 +745,7 @@ main(int argc, char** argv)
         fprintf(stderr, "Warning: SwapInterval could not be set: %s\n",
                 SDL_GetError());
 
-    glEnable(GL_CULL_FACE);
+    //glEnable(GL_CULL_FACE);
     /* Clockwise winding order are 'face' vertices */
     //glFrontFace(GL_CW);
 
@@ -780,15 +782,15 @@ main(int argc, char** argv)
         time = (float)(SDL_GetTicks() * 0.001);
         shader.set_uniform_1f("time", time);
 
-        //percent = (sin(0.25 * time) + 1.0) / 2.0;
-        //vertices = subdivideIco(ico, 3, percent);
-        //glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), &vertices[0]);
+        percent = (sin(0.25 * time) + 1.0) / 2.0;
+        vertices = subdivideIco(ico, 3, percent);
+        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), &vertices[0]);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
-        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, pos);
         //model = glm::rotate(model, 5.f * percent, glm::vec3(0.25, 0.75, 0.25));
