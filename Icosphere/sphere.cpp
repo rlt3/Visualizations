@@ -9,13 +9,15 @@
 #include <GL/gl.h>
 #include <GL/glext.h>
 #include <GL/glu.h>
+#include <SDL2/SDL.h>
+#include <SDL2/SDL_opengl.h>
 #elif _WIN32
 #pragma comment(lib, "glew32.lib")
 #include <GL/glew.h>
-#endif
-
 #include <SDL.h>
 #include <SDL_opengl.h>
+#endif
+
 #include <glm/glm.hpp>
 #include <glm/gtc/matrix_transform.hpp>
 #include <glm/gtx/euler_angles.hpp>
@@ -25,95 +27,48 @@ using namespace glm;
 using namespace std;
 
 static const GLchar* vertex_source =
-"#version 130\n"
-"in vec3 vertex;\n"
-//"in vec3 norm;\n"
-"out vec3 FragPos;\n"
-"out vec3 Normal;\n"
-"uniform float time;\n"
-"uniform mat4 model;\n"
-"uniform mat4 view;\n"
-"uniform mat4 projection;\n"
-"void main()\n"
-"{\n"
-"   FragPos = vec3(model * vec4(vertex, 1.0));\n"
-//"   Normal = norm;\n"
-"   vec3 v = vertex;\n"
-//"   v.z *= sin(time);\n"
-"   gl_Position = projection * view * model * vec4(v.xyz, 1.0);\n"
-"}";
+    "#version 130\n"
+    "in vec3 vertex;\n"
+    "in vec3 norm;\n"
+	"out vec3 FragPos;\n"
+	"out vec3 Normal;\n"
+    "uniform float time;\n"
+    "uniform mat4 model;\n"
+    "uniform mat4 view;\n"
+    "uniform mat4 projection;\n"
+    "void main()\n"
+    "{\n"
+    "   FragPos = vec3(model * vec4(vertex, 1.0));\n"
+    "   Normal = norm;\n"
+    "   vec3 v = vertex;\n"
+    //"   v.z *= sin(time);\n"
+    "   gl_Position = projection * view * model * vec4(v.xyz, 1.0);\n"
+    "}";
 
 static const GLchar* fragment_source =
-"#version 130\n"
-"out vec4 FragColor;\n"
-"in vec3 Normal;\n"
-"in vec3 FragPos;\n"
-"uniform vec3 lightPos;\n"
-"uniform vec3 lightColor;\n"
-"uniform vec3 objectColor;\n"
-"void main()\n"
-"{\n"
-"   FragColor = vec4(1.0);\n"
-//"   /* ambient */\n"
-//"   float ambientStrength = 0.1;\n"
-//"   vec3 ambient = ambientStrength * lightColor;\n"
-//"\n"
-//"   /* diffuse */\n"
-//"   vec3 norm = normalize(Normal);\n"
-//"   vec3 lightDir = normalize(lightPos - FragPos);\n"
-//"   float diff = max(dot(norm, lightDir), 0.0);\n"
-//"   vec3 diffuse = diff * lightColor;\n"
-//"\n"
-//"   vec3 result = (ambient + diffuse) * objectColor;\n"
-//"   FragColor = vec4(result, 1.0);\n"
-"}";
-
-//static const float vertices[] = {
-//    /* (x,y,z) and fragment shader (x,y,z) */
-//
-//    /* back */
-//    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-//     0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-//     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-//     0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-//    -0.5f,  0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-//    -0.5f, -0.5f, -0.5f,  0.0f,  0.0f, -1.0f,
-//    /* front */
-//    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-//     0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-//     0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-//     0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-//    -0.5f, -0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-//    -0.5f,  0.5f,  0.5f,  0.0f,  0.0f,  1.0f,
-//    /* left */
-//    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-//    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-//    -0.5f,  0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-//    -0.5f, -0.5f, -0.5f, -1.0f,  0.0f,  0.0f,
-//    -0.5f,  0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-//    -0.5f, -0.5f,  0.5f, -1.0f,  0.0f,  0.0f,
-//    /* right */
-//     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-//     0.5f,  0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-//     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-//     0.5f, -0.5f, -0.5f,  1.0f,  0.0f,  0.0f,
-//     0.5f, -0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-//     0.5f,  0.5f,  0.5f,  1.0f,  0.0f,  0.0f,
-//    /* bottom */
-//    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-//     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-//     0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-//     0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-//    -0.5f, -0.5f, -0.5f,  0.0f, -1.0f,  0.0f,
-//    -0.5f, -0.5f,  0.5f,  0.0f, -1.0f,  0.0f,
-//    /* top */
-//    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-//     0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f,
-//     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-//     0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-//    -0.5f,  0.5f,  0.5f,  0.0f,  1.0f,  0.0f,
-//    -0.5f,  0.5f, -0.5f,  0.0f,  1.0f,  0.0f
-//};
+    "#version 130\n"
+    "out vec4 FragColor;\n"
+    "in vec3 Normal;\n"
+    "in vec3 FragPos;\n"
+    "uniform vec3 lightPos;\n"
+    "uniform vec3 lightColor;\n"
+    "uniform vec3 objectColor;\n"
+    "void main()\n"
+    "{\n"
+    //"   FragColor = vec4(1.0);\n"
+    "   /* ambient */\n"
+    "   float ambientStrength = 0.1;\n"
+    "   vec3 ambient = ambientStrength * lightColor;\n"
+    "\n"
+    "   /* diffuse */\n"
+    "   vec3 norm = normalize(Normal);\n"
+    "   vec3 lightDir = normalize(lightPos - FragPos);\n"
+    "   float diff = max(dot(norm, lightDir), 0.0);\n"
+    "   vec3 diffuse = diff * lightColor;\n"
+    "\n"
+    "   vec3 result = (ambient + diffuse) * objectColor;\n"
+    "   FragColor = vec4(result, 1.0);\n"
+    "}";
 
 class Shader {
     public:
@@ -616,22 +571,47 @@ normalize3f(float* v)
     v[2] /= d;
 }
 
-    void
-addVertices(float* v, vector<float>& out)
+void
+addVertices (float *v, float *n, vector<float> &out)
 {
     for (int i = 0; i < 3; i++)
         out.push_back(v[i]);
+    for (int i = 0; i < 3; i++)
+        out.push_back(n[i]);
+}
+
+void
+normCrossProd (float u[3], float v[3], float *out)
+{
+    out[0] = u[1] * v[2] - u[2] * v[1];
+    out[1] = u[2] * v[0] - u[0] * v[2];
+    out[2] = u[0] * v[1] - u[1] * v[0];
+    normalize3f(out);
+}
+
+/* Compute normal for entire face which all vertices of face use */
+void
+faceNorm (float *vA, float *vB, float *vC, float *out)
+{
+    float d1[3], d2[3];
+    for (int k = 0; k < 3; k++) {
+        d1[k] = vA[k] - vB[k];
+        d2[k] = vB[k] - vC[k];
+    }
+    normCrossProd(d1, d2, out);
 }
 
     void
 subdivide(float* vA, float* vB, float* vC, int depth, vector<float>& out, float percent)
 {
     float vAB[3], vBC[3], vCA[3];
+    float norm[3];
 
     if (depth == 0) {
-        addVertices(vA, out);
-        addVertices(vB, out);
-        addVertices(vC, out);
+        faceNorm(vA, vB, vC, norm);
+        addVertices(vA, norm, out);
+        addVertices(vB, norm, out);
+        addVertices(vC, norm, out);
         return;
     }
 
@@ -665,7 +645,7 @@ subdivideIco(vector<float>& ico, int depth, float percent)
     float vA[3], vB[3], vC[3];
 
     if (percent == 0.0)
-        percent = 0.01;
+        percent = 0.0001;
 
     vector<float> output;
 
@@ -691,7 +671,7 @@ main(int argc, char** argv)
 
     SDL_DisplayMode display;
     GLuint vertex_id;
-    //GLuint norm_id;
+    GLuint norm_id;
 
     if (SDL_Init(SDL_INIT_VIDEO) != 0) {
         fprintf(stderr, "SDL Failed to init: %s\n", SDL_GetError());
@@ -750,16 +730,14 @@ main(int argc, char** argv)
     /* setup vertices attribute, width of 3 in span of 6 elements */
     vertex_id = shader.get_attrib_loc("vertex");
     glVertexAttribPointer(vertex_id, 3,
-            GL_FLOAT, GL_FALSE, 3 * sizeof(float), 0);
-    //glVertexAttribPointer(vertex_id, 3,
-    //            GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
+                GL_FLOAT, GL_FALSE, 6 * sizeof(float), 0);
     glEnableVertexAttribArray(vertex_id);
 
     /* setup normal attribute, width of 3, 3 elements into span of 6 elements */
-    //norm_id = shader.get_attrib_loc("norm");
-    //glVertexAttribPointer(norm_id, 3, GL_FLOAT,
-    //            GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
-    //glEnableVertexAttribArray(norm_id);
+    norm_id = shader.get_attrib_loc("norm");
+    glVertexAttribPointer(norm_id, 3, GL_FLOAT,
+                GL_FALSE, 6 * sizeof(float), (void*)(3 * sizeof(float)));
+    glEnableVertexAttribArray(norm_id);
 
     if (SDL_GL_SetSwapInterval(1) < 0)
         fprintf(stderr, "Warning: SwapInterval could not be set: %s\n",
@@ -802,18 +780,19 @@ main(int argc, char** argv)
         time = (float)(SDL_GetTicks() * 0.001);
         shader.set_uniform_1f("time", time);
 
-        percent = (sin(time) + 1.0) / 2.0;
-        vertices = subdivideIco(ico, 3, percent);
-        glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), &vertices[0]);
+        //percent = (sin(0.25 * time) + 1.0) / 2.0;
+        //vertices = subdivideIco(ico, 3, percent);
+        //glBufferSubData(GL_ARRAY_BUFFER, 0, vertices.size() * sizeof(float), &vertices[0]);
 
         glClearColor(0.2f, 0.3f, 0.3f, 1.0f);
         glClear(GL_COLOR_BUFFER_BIT | GL_DEPTH_BUFFER_BIT);
 
-        glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        //glPolygonMode(GL_FRONT_AND_BACK, GL_LINE);
+        glPolygonMode(GL_FRONT_AND_BACK, GL_FILL);
         glm::mat4 model = glm::mat4(1.0f);
         model = glm::translate(model, pos);
-        //model = glm::rotate(model, time, glm::vec3(0.25, 0.5, 0.5));
-        model = glm::rotate(model, time, glm::vec3(0.0, 1, 0.0));
+        //model = glm::rotate(model, 5.f * percent, glm::vec3(0.25, 0.75, 0.25));
+        model = glm::rotate(model, time, glm::vec3(0.0, 1.0, 0.0));
         shader.set_uniform_mat4fv("model", model);
         glDrawArrays(GL_TRIANGLES, 0, vertices.size());
 
