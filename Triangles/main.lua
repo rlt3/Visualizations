@@ -6,179 +6,198 @@ function love.conf (t)
     t.console = true
 end
 
-function gold (alpha)
-    love.graphics.setColor(1, 0.84, 0, alpha)
+function gold ()
+    love.graphics.setColor(1, 0.84, 0)
 end
 
 function white (alpha)
-    love.graphics.setColor(1, 1, 1, alpha)
+    love.graphics.setColor(1, 1, 1, alpha or 1)
 end
 
-function black (alpha)
-    love.graphics.setColor(0, 0, 0, alpha)
+function black ()
+    love.graphics.setColor(0, 0, 0)
 end
 
-function green (alpha)
-    love.graphics.setColor(0, 1, 0, alpha)
+function green ()
+    love.graphics.setColor(0, 1, 0)
 end
 
-function red (alpha)
-    love.graphics.setColor(1, 0, 0, alpha)
+function red ()
+    love.graphics.setColor(1, 0, 0)
 end
 
-function love.keypressed (k)
-    if k == 'escape' or k == 'q' then
-        love.event.quit()
-    end
-end
-
-local deg90  = math.pi / 2
-local deg60  = math.pi / 3
-local deg120 = 2 * deg60
-local deg240 = 2 * deg120
-
-local x, y = 400, 300
-local r = 100
-
-local degrees = 1
-local corners = 1
-local max = 36
-local time = 0
-local step = 0.9
-
-local alpha = 0
-local alphadt = 0
-
-function triangles (n)
-    local angle = (2 * math.pi) / n
-
-    local coords = {}
-
-    for i = 1,n do
-        local ax = x + r * math.cos(i * angle)
-        local ay = y + r * math.sin(i * angle)
-        love.graphics.line(x,y, ax,ay)
-        table.insert(coords, ax)
-        table.insert(coords, ay)
-    end
-
-    if #coords >= 6 then
-        love.graphics.polygon("line", coords)
-    end
-end
-
-function equilateral (angle)
-    local tx,ty = 0, r
-
-    local rx = (tx * math.cos(deg120)) - (ty * math.sin(deg120))
-    local ry = (tx * math.sin(deg120)) + (ty * math.cos(deg120))
-
-    local lx = (tx * math.cos(deg240)) - (ty * math.sin(deg240))
-    local ly = (tx * math.sin(deg240)) + (ty * math.cos(deg240))
-
-    local coords = { -tx,-ty, -lx,-ly, -rx,-ry }
-
-    love.graphics.push()
-    love.graphics.translate(x, y + r)
-    love.graphics.rotate(angle)
-    love.graphics.polygon("fill", coords)
-
-    love.graphics.pop()
-end
-
-local circledt = 0
-
-function circle_draw (alpha)
-    local pts = {}
-
-    --  A
-    --  |\
-    --  | \
-    -- C|__\ B
-
-
-    local deg   = math.rad(-degrees)
-    local deg90 = math.rad(-degrees - 90)
-
-    local ax = x + (r * math.cos(deg90))
-    local ay = y + (r * math.sin(deg90))
-    local bx = x + (r * math.cos(deg))
-    local by = y + (r * math.sin(deg))
-    local cx,cy = x,y
-
-    for d = degrees + 90, degrees + 360 do
-        local rad = math.rad(-d)
-        table.insert(pts, cx + (r * math.cos(rad)))
-        table.insert(pts, cy + (r * math.sin(rad)))
-    end
-
-    red(alpha)
-    love.graphics.line(pts)
-    green(alpha)
-    love.graphics.polygon("line", ax,ay, bx,by, cx,cy)
+function pointAtDegree (x, y, r, degree)
+    -- negative degrees here because we're in upside-down world
+    local deg = math.rad(-degree)
+    local px = x + (r * math.cos(deg))
+    local py = y + (r * math.sin(deg))
+    return px, py
 end
 
 function lerp (from, to, t)
     return (1 - t) * from + t * to;
 end
 
-local stepping = true
-local stepping_count = 0
+local x, y = 400, 300
+local r = 200
+local step = 1
 
-function circle_step (dt)
-    if not stepping then
-        return
+local equi_degrees = 0
+local equi_dt = 0
+
+function equilateral (degree)
+    local ax,ay = pointAtDegree(x, y, r, degree)
+    local bx,by = pointAtDegree(x, y, r, degree + 120)
+    local cx,cy = pointAtDegree(x, y, r, degree + 240)
+    love.graphics.polygon("fill", ax,ay, bx,by, cx,cy)
+end
+
+function equilateral_update (dt)
+    equi_dt = equi_dt + (dt / 8)
+    if equi_dt >= 1 then
+        step = step + 1
+        equi_dt = 0
+    else
+        equi_degrees = math.floor(lerp(0, 360, equi_dt))
+    end
+end
+
+function circle ()
+    local pts = {}
+    for d = 1, 360 do
+        local px,py = pointAtDegree(x, y, r, d)
+        love.graphics.line(x,y, px,py)
+        table.insert(pts, px)
+        table.insert(pts, py)
+    end
+    --love.graphics.polygon("line", pts)
+end
+
+function lines (numlines)
+    local angle = 360 / numlines
+    gold()
+    love.graphics.setLineWidth(4)
+    for n = 1, numlines do
+        local px,py = pointAtDegree(x, y, r, n * angle)
+        love.graphics.line(x,y, px,py)
+    end
+    love.graphics.setLineWidth(1)
+end
+
+function shapes (numlines)
+    local angle = 360 / numlines
+    local pts = {}
+    for n = 1, numlines do
+        local px,py = pointAtDegree(x, y, r, n * angle)
+        love.graphics.line(x,y, px,py)
+        table.insert(pts, px)
+        table.insert(pts, py)
     end
 
-    circledt = circledt + (dt / 5)
-    if circledt > 1 then
-        circledt = 0
+    if #pts >= 6 then
+        love.graphics.polygon("line", pts)
     end
-    degrees = math.floor(lerp(1, 360, circledt))
+end
 
-    if degrees == 225 then
-        stepping_count = stepping_count + 1
-        if stepping_count > 4 then
-            stepping = false
+local slowness = 8
+
+function shapes_update (dt)
+    local ending = false
+
+    equi_dt = equi_dt + (dt / slowness)
+
+    if equi_dt >= 1 then
+        step = step + 1
+        equi_dt = 1
+    end
+
+    equi_degrees = math.floor(lerp(1, 360, equi_dt))
+
+    if equi_degrees <= 16 then
+        slowness = 256
+    elseif equi_degrees <= 32 then
+        slowness = 16
+    else
+        slowness = 8
+    end
+end
+
+function pyramid_create (dt)
+    equi_dt = equi_dt + (dt / 4)
+    if equi_dt >= 1 then
+        step = step + 1
+        equi_dt = 1
+    end
+    r = math.floor(lerp(200, 100, equi_dt))
+end
+
+local pyramid_alpha = 1
+local pyramid_dt = 0
+local pyramid_negr = 0
+
+function pyramid_beam ()
+    white(pyramid_alpha)
+    equilateral(90)
+
+    gold()
+    love.graphics.push()
+    love.graphics.translate(0, -r + pyramid_negr)
+    love.graphics.setLineWidth(4)
+    shapes(equi_degrees)
+    love.graphics.pop()
+end
+
+function pyramid_update (dt)
+    if step == 4 then
+        pyramid_dt = pyramid_dt + dt
+        if pyramid_dt >= 1 then
+            equi_degrees = equi_degrees + 1
+            if equi_degrees > 9 then
+                step = step + 1
+            end
+            pyramid_dt = 0
         end
+    else
+        pyramid_dt = pyramid_dt + (dt / 8)
+        if pyramid_dt >= 1 then
+            pyramid_dt = 1
+        end
+        pyramid_alpha = lerp(1, 0, pyramid_dt)
+        equi_degrees = math.floor(lerp(9, 360, pyramid_dt))
+        r = math.floor(lerp(100, 200, pyramid_dt))
+        pyramid_negr = math.floor(lerp(0, 200, pyramid_dt))
     end
 end
 
 function love.draw ()
-    circle_draw(1)
-    
-    if stepping_count > 1 then
-        gold(alpha)
-        triangles(corners)
-
-        white(alpha)
-        equilateral(0)
+    if step == 1 then
+        lines(360 - equi_degrees)
+        black()
+        equilateral(equi_degrees)
+    elseif step == 2 then
+        white()
+        equilateral(equi_degrees)
+    elseif step == 3 then
+        white()
+        equilateral(90)
+    else
+        pyramid_beam()
     end
 end
 
 function love.update (dt)
-    circle_step(dt)
-
-    if stepping_count > 1 then
-        time = time + dt
-        if time > step then
-            time = 0
-            corners = corners + 1
-            if corners > max then
-                corners = 1
-            end
+    if step == 1 then
+        equilateral_update(dt)
+    elseif step == 2 then
+        equilateral_update(dt)
+        if equi_degrees == 90 then
+            step = step + 1
+            equi_dt = 0
         end
-
-        alphadt = alphadt + (dt / 5)
-        if alphadt > 1 then
-            alphadt = 0
-        end
-        alpha = lerp(0, 1, alphadt)
+    elseif step == 3 then
+        pyramid_create(dt)
+        equi_degrees = 1
+    else
+        pyramid_update(dt)
     end
-
-    --if degrees >= 90 then
-    --    degrees = 0
-    --else
-    --    degrees = degrees + 5*dt
-    --end
 end
