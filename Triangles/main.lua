@@ -14,50 +14,6 @@ function pointAtDegree (x, y, r, degree)
     return px, py
 end
 
-function shape (x, y, r, numlines)
-    local angle = 360 / numlines
-    local pts = {}
-    for n = 1, numlines do
-        local px,py = pointAtDegree(x, y, r, n * angle)
-        love.graphics.line(x,y, px,py)
-        table.insert(pts, px)
-        table.insert(pts, py)
-    end
-
-    if #pts >= 6 then
-        love.graphics.polygon("line", pts)
-    end
-end
-
-function regular_shapes ()
-    --shape(100, 100, 50, 1)
-    --shape(300, 100, 50, 2)
-    --shape(500, 100, 50, 3)
-    --shape(700, 100, 50, 4)
-
-    --shape(100, 300, 50, 5)
-    --shape(300, 300, 50, 6)
-    --shape(500, 300, 50, 7)
-    --shape(700, 300, 50, 8)
-
-    --shape(100, 500, 50, 9)
-    --shape(300, 500, 50, 10)
-    --shape(500, 500, 50, 11)
-    --shape(700, 500, 50, 12)
-
-    shape(100, 100, 75, 1)
-    shape(400, 100, 75, 2)
-    shape(700, 100, 75, 3)
-
-    shape(100, 300, 75, 4)
-    shape(400, 300, 75, 5)
-    shape(700, 300, 75, 6)
-
-    shape(100, 500, 75, 7)
-    shape(400, 500, 75, 8)
-    shape(700, 500, 75, 9)
-end
-
 function circle (x, y, r)
     local pts = {}
     for d = 1, 360 do
@@ -65,27 +21,32 @@ function circle (x, y, r)
         table.insert(pts, px)
         table.insert(pts, py)
     end
+    love.graphics.setColor(1, 1, 1)
     love.graphics.polygon("line", pts)
 end
 
 local degree = 0
 local degree_dt = 0
 
+function trail (x, y, r)
+    love.graphics.setPointSize(2)
+    for d = 0, 360 do
+        local px,py = pointAtDegree(x, y, r, d + degree)
+        love.graphics.setColor(1, 0.84, 0, lerp(0, 1, math.fmod(d, 360) / 360))
+        love.graphics.points(px, py)
+    end
+end
+
 function love.draw ()
     local x,y = 400,300
     local r = 100
-
-    -- draw a circle at x,y of radius r
-    circle(x, y, r)
 
     -- have px,py be the center of another circle, with r radius
     local px,py = pointAtDegree(x, y, r, degree)
     circle(px, py, r)
 
-    -- draw the centers of these circles
-    love.graphics.setPointSize(5)
-    love.graphics.points(x, y)
-    love.graphics.points(px, py)
+    -- draw the original circle as a golden trail
+    trail(x, y, r, degree)
 
     -- with px,py as the center of our next circle, we have necessarily given
     -- it an angle, i.e. `degree`. we want the top-most point of our
@@ -95,7 +56,19 @@ function love.draw ()
     local bx,by = pointAtDegree(px, py, r, degree - 60)
     local cx,cy = pointAtDegree(px, py, r, degree + 60)
 
+    love.graphics.setColor(1, 1, 1)
     love.graphics.polygon("line", x,y, bx,by, cx,cy)
+
+    -- draw the centers of the circles
+    love.graphics.setPointSize(5)
+    love.graphics.points(px, py)
+
+    love.graphics.setColor(1, 0, 0)
+    love.graphics.points(x, y)
+    love.graphics.setColor(0, 1, 0)
+    love.graphics.points(bx, by)
+    love.graphics.setColor(0, 0, 1)
+    love.graphics.points(cx, cy)
 end
 
 function lerp (from, to, t)
