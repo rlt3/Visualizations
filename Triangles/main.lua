@@ -28,47 +28,34 @@ end
 local degree = 0
 local degree_dt = 0
 
-function trail (x, y, r)
-    love.graphics.setPointSize(2)
-    for d = 0, 360 do
-        local px,py = pointAtDegree(x, y, r, d + degree)
-        love.graphics.setColor(1, 0.84, 0, lerp(0, 1, math.fmod(d, 360) / 360))
-        love.graphics.points(px, py)
-    end
+function pyramid (x, y, r, degree)
+    -- angle of apex is a 3 twelves of a rotation (36 degrees).
+    -- two base angles are 6 twelves of a rotation (72 degrees).
+    -- from the given angle, we can rotate 12 twelves (144) in either direction
+    -- to achieve the construction.
+    local ax,ay = pointAtDegree(x, y, r, degree)
+    local bx,by = pointAtDegree(x, y, r, degree + 144)
+    local cx,cy = pointAtDegree(x, y, r, degree - 144)
+    love.graphics.polygon("line", ax,ay, bx,by, cx,cy)
 end
 
 function love.draw ()
     local x,y = 400,300
     local r = 100
 
-    -- have px,py be the center of another circle, with r radius
-    local px,py = pointAtDegree(x, y, r, degree)
-    circle(px, py, r)
+    circle(x, y, r)
 
-    -- draw the original circle as a golden trail
-    trail(x, y, r, degree)
+    pyramid(x, y, r, degree)
+    -- we just add 72 degrees, (2/5)pi, to each apex
+    pyramid(x, y, r, degree + 72)
+    pyramid(x, y, r, degree + 144)
+    pyramid(x, y, r, degree + 216)
+    pyramid(x, y, r, degree + 288)
 
-    -- with px,py as the center of our next circle, we have necessarily given
-    -- it an angle, i.e. `degree`. we want the top-most point of our
-    -- equilateral triangle (which I call `a`) to be the center of our first
-    -- circle. if that's the case, then our equilateral triangle will have its
-    -- other 2 points 60 degrees from itself, because 3*60 = 180.
-    local bx,by = pointAtDegree(px, py, r, degree - 60)
-    local cx,cy = pointAtDegree(px, py, r, degree + 60)
-
-    love.graphics.setColor(1, 1, 1)
-    love.graphics.polygon("line", x,y, bx,by, cx,cy)
-
-    -- draw the centers of the circles
-    love.graphics.setPointSize(5)
-    love.graphics.points(px, py)
-
-    love.graphics.setColor(1, 0, 0)
-    love.graphics.points(x, y)
-    love.graphics.setColor(0, 1, 0)
-    love.graphics.points(bx, by)
-    love.graphics.setColor(0, 0, 1)
-    love.graphics.points(cx, cy)
+    -- 36deg  = pi / 5
+    -- 18deg  = pi / 10
+    -- 72deg  = (2/5) pi
+    -- 144deg = (4/5) pi
 end
 
 function lerp (from, to, t)
