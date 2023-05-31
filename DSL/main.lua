@@ -1,0 +1,103 @@
+local Queue = require("Queue")
+
+function love.conf (t)
+    t.window.title = "Triangles"
+    t.window.icon = nil -- Filepath to an image to use as the window's icon (string)
+    t.window.width = 800
+    t.window.height = 600
+    t.console = true
+end
+
+function love.keypressed(k)
+    if k == 'escape' or k == 'q' then
+        love.event.quit()
+    end
+end
+
+function pointAtDegree (x, y, r, degree)
+    -- negative degrees here because we're in upside-down world
+    local deg = math.rad(-degree)
+    local px = x + (r * math.cos(deg))
+    local py = y + (r * math.sin(deg))
+    return px, py
+end
+
+function circle (x, y, r)
+    local pts = {}
+    for d = 1, 360 do
+        local px,py = pointAtDegree(x, y, r, d)
+        table.insert(pts, px)
+        table.insert(pts, py)
+    end
+    love.graphics.setColor(1, 1, 1)
+    love.graphics.polygon("line", pts)
+end
+
+function lerp (from, to, t)
+    return (1 - t) * from + t * to;
+end
+
+function circle_routine (kind, x, y)
+    local t  = 0
+    local dt = 0
+    local done = false
+
+    coroutine.yield("ready")
+
+    while true do
+        r = lerp(1, 400, t)
+        circle(x, y, r)
+
+        if done == true then
+            return kind, circle_routine
+        end
+
+        dt = coroutine.yield("continue")
+        t = t + dt
+
+        if t >= 1 then
+            t = 1
+            done = true
+        end
+    end
+end
+
+local P   = Queue.new()
+local Pdt = 0
+
+function coroutine.setup (func, kind, ...)
+    local routine = coroutine.create(func)
+    local s, msg = coroutine.resume(routine, kind, ...)
+    if msg ~= "ready" then
+        error("Coroutine isn't ready after setup: " .. msg)
+    end
+    return routine
+end
+
+function love.load ()
+    P:push(coroutine.setup(circle_routine, "repeat", 400, 300))
+end
+
+function love.draw ()
+    local N = Queue.new()
+    while P:length() > 0 do
+        local routine = P:pop()
+        local s, msg, func = coroutine.resume(routine, Pdt)
+        if msg == "continue" then
+            N:push(routine)
+        elseif msg == "repeat" then
+            N:push(coroutine.setup(circle_routine, msg, 400, 300))
+        end
+    end
+    P = N
+end
+
+function love.mousepressed (x, y, button)
+    if button == 1 then
+        P:push(coroutine.setup(circle_routine, "end", x, y))
+    end
+end
+
+function love.update (dt)
+    Pdt = dt
+end
