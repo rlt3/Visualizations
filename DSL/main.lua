@@ -1,4 +1,4 @@
-local Queue = require("Queue")
+local Pipeline = require("Pipeline")
 
 function love.conf (t)
     t.window.title = "Triangles"
@@ -62,42 +62,22 @@ function circle_routine (kind, x, y)
     end
 end
 
-local P   = Queue.new()
-local Pdt = 0
-
-function coroutine.setup (func, kind, ...)
-    local routine = coroutine.create(func)
-    local s, msg = coroutine.resume(routine, kind, ...)
-    if msg ~= "ready" then
-        error("Coroutine isn't ready after setup: " .. msg)
-    end
-    return routine
-end
+local Pipeline = Pipeline.new()
 
 function love.load ()
-    P:push(coroutine.setup(circle_routine, "repeat", 400, 300))
+    Pipeline:respawn(circle_routine, 400, 300)
 end
 
 function love.draw ()
-    local N = Queue.new()
-    while P:length() > 0 do
-        local routine = P:pop()
-        local s, msg, func = coroutine.resume(routine, Pdt)
-        if msg == "continue" then
-            N:push(routine)
-        elseif msg == "repeat" then
-            N:push(coroutine.setup(circle_routine, msg, 400, 300))
-        end
-    end
-    P = N
+    Pipeline:draw()
 end
 
 function love.mousepressed (x, y, button)
     if button == 1 then
-        P:push(coroutine.setup(circle_routine, "end", x, y))
+        Pipeline:once(circle_routine, x, y)
     end
 end
 
 function love.update (dt)
-    Pdt = dt
+    Pipeline:update(dt)
 end
