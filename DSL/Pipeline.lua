@@ -20,26 +20,23 @@ function Pipeline.new ()
     }, Pipeline)
 end
 
-function Pipeline:spawn (name, func, ...)
-    return name, func, {...}
-end
-
-function Pipeline:once (func, ...)
-    self.queue:push(coroutine.setup(func, "once", ...))
-end
-
-function Pipeline:respawn (func, ...)
-    self.queue:push(coroutine.setup(func, "respawn", ...))
+function Pipeline:spawn (effect)
+    local routine = coroutine.create(function ()
+        local routine = effect:routine()
+        routine(dt)
+        return effect.kind, effect
+    end)
+    self.queue:push(routine)
 end
 
 function Pipeline:draw ()
     while self.queue:length() > 0 do
         local routine = self.queue:pop()
-        local s, msg, func = coroutine.resume(routine, self.dt)
+        local s, msg, effect = coroutine.resume(routine, self.dt)
         if msg == "continue" then
             self.other:push(routine)
         elseif msg == "respawn" then
-            self.other:push(coroutine.setup(func, msg, 400, 300))
+            self:spawn(effect)
         end
     end
 

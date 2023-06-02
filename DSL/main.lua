@@ -1,4 +1,5 @@
 local Pipeline = require("Pipeline")
+local Effect = require("Effect")
 
 function love.conf (t)
     t.window.title = "Triangles"
@@ -37,27 +38,27 @@ function lerp (from, to, t)
     return (1 - t) * from + t * to;
 end
 
-function circle_routine (kind, x, y)
-    local t  = 0
+function circle_context (x, y)
+    local t = 0
     local dt = 0
     local done = false
 
-    coroutine.yield("ready")
+    return function ()
+        while true do
+            r = lerp(1, 400, t)
+            circle(x, y, r)
 
-    while true do
-        r = lerp(1, 400, t)
-        circle(x, y, r)
+            if done == true then
+                return
+            end
 
-        if done == true then
-            return kind, circle_routine
-        end
+            dt = coroutine.yield("continue")
+            t = t + dt
 
-        dt = coroutine.yield("continue")
-        t = t + dt
-
-        if t >= 1 then
-            t = 1
-            done = true
+            if t >= 1 then
+                t = 1
+                done = true
+            end
         end
     end
 end
@@ -65,7 +66,7 @@ end
 local Pipeline = Pipeline.new()
 
 function love.load ()
-    Pipeline:respawn(circle_routine, 400, 300)
+    Pipeline:spawn(Effect.new("respawn", circle_context, 400, 300))
 end
 
 function love.draw ()
@@ -74,7 +75,7 @@ end
 
 function love.mousepressed (x, y, button)
     if button == 1 then
-        Pipeline:once(circle_routine, x, y)
+        Pipeline:spawn(Effect.new("once", circle_context, x, y))
     end
 end
 
