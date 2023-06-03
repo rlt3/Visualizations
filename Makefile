@@ -1,2 +1,2 @@
 all:
-	"/mnt/c/Program Files/LOVE/"lovec.exe DSL/
+	"/mnt/c/Program Files/LOVE/"lovec.exe Mono/
