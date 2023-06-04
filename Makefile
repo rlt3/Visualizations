@@ -1,2 +1,2 @@
 all:
-	"/mnt/c/Program Files/LOVE/"lovec.exe PerfectTrinity/
+	"/mnt/c/Program Files/LOVE/"lovec.exe Tiles/
