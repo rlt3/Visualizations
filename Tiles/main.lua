@@ -122,19 +122,54 @@ function draw ()
 
     end
 
-    if p ~= nil then
-        for i,t in pairs(Neighbors[p.x][p.y]) do
-            love.graphics.setColor(1, 0, 0)
-            love.graphics.rectangle("fill", t.x, t.y, TileSize, TileSize)
-        end
-    end
+    --if p ~= nil then
+    --    for i,t in pairs(Neighbors[p.x][p.y]) do
+    --        love.graphics.setColor(1, 0, 0)
+    --        love.graphics.rectangle("fill", t.x, t.y, TileSize, TileSize)
+    --    end
+    --end
+end
+
+function lerpColor (from, to, t)
+    local r = (1 - t) * from[1] + t * to[1]
+    local g = (1 - t) * from[2] + t * to[2]
+    local b = (1 - t) * from[3] + t * to[3]
+    return { r, g, b }
+end
+
+local primecolor = { 1, 1, 1 }
+local color_step = 1
+local transitions = {
+    { 1, 1, 1 },
+    { 1, 1, 1 }, -- white
+    { 1, 1, 0 }, -- yellow
+    { 1, 0, 0 }, -- red
+    { 1, 0, 1 }, -- magenta
+    { 0, 1, 0 }, -- green
+    { 0, 1, 1 }, -- cyan
+    { 0, 0, 1 }, -- blue
+    { 0, 0, 0 }, -- black
+    { 0, 0, 0 }
+}
+
+function transition_color (n, t)
+    local from = transitions[n]
+    local to = transitions[n + 1]
+    return lerpColor(from, to, t)
 end
 
 function update (dt)
-    --for i,t in pairs(Tiles) do
-    --    for i,n in pairs(Neighbors[t.x][t.y]) do
-    --    end
-    --end
+    --if p == nil then return end
+
+    nt = step(nt, dt * 0.5)
+    primecolor = transition_color(color_step, nt)
+
+    if nt == 1 then
+        color_step = color_step + 1
+        if color_step > #transitions - 1 then
+            color_step = 1
+        end
+    end
 end
 
 function love.load ()
@@ -142,12 +177,16 @@ function love.load ()
 end
 
 function love.draw ()
-    draw()
+    love.graphics.setColor(unpack(primecolor))
+    local width, height = love.graphics.getDimensions()
+    love.graphics.rectangle("fill", 0, 0, width, height)
+    --draw()
 end
 
 function love.mousepressed (x, y, button)
     x, y = toTileCoords(x, y)
     p = Map[x][y]
+    nt = 0
 end
 
 function love.update (dt)
